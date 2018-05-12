@@ -414,3 +414,42 @@ func DtVdot2D(u, v *[3]float64) float64 {
 func DtVperp2D(u, v *[3]float64) float64 {
 	return u[2]*v[0] - u[0]*v[2]
 }
+
+/// @}
+/// @name Computational geometry helper functions.
+/// @{
+
+/// Derives the signed xz-plane area of the triangle ABC, or the relationship of line AB to point C.
+///  @param[in]		a		Vertex A. [(x, y, z)]
+///  @param[in]		b		Vertex B. [(x, y, z)]
+///  @param[in]		c		Vertex C. [(x, y, z)]
+/// @return The signed xz-plane area of the triangle.
+func DtTriArea2D(a, b, c *[3]float64) float64 {
+	abx := b[0] - a[0]
+	abz := b[2] - a[2]
+	acx := c[0] - a[0]
+	acz := c[2] - a[2]
+	return acx*abz - abx*acz
+}
+
+/// Determines if two axis-aligned bounding boxes overlap.
+///  @param[in]		amin	Minimum bounds of box A. [(x, y, z)]
+///  @param[in]		amax	Maximum bounds of box A. [(x, y, z)]
+///  @param[in]		bmin	Minimum bounds of box B. [(x, y, z)]
+///  @param[in]		bmax	Maximum bounds of box B. [(x, y, z)]
+/// @return True if the two AABB's overlap.
+/// @see dtOverlapBounds
+func DtOverlapQuantBounds(amin, amax, bmin, bmax *[3]uint16) bool {
+	return !(amin[0] > bmax[0] || amax[0] < bmin[0] || amin[1] > bmax[1] || amax[1] < bmin[1] || amin[2] > bmax[2] || amax[2] < bmin[2])
+}
+
+/// Determines if two axis-aligned bounding boxes overlap.
+///  @param[in]		amin	Minimum bounds of box A. [(x, y, z)]
+///  @param[in]		amax	Maximum bounds of box A. [(x, y, z)]
+///  @param[in]		bmin	Minimum bounds of box B. [(x, y, z)]
+///  @param[in]		bmax	Maximum bounds of box B. [(x, y, z)]
+/// @return True if the two AABB's overlap.
+/// @see dtOverlapQuantBounds
+func DtOverlapBounds(amin, amax, bmin, bmax *[3]float64) bool {
+	return !(amin[0] > bmax[0] || amax[0] < bmin[0] || amin[1] > bmax[1] || amax[1] < bmin[1] || amin[2] > bmax[2] || amax[2] < bmin[2])
+}

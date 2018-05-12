@@ -351,3 +351,29 @@ func Test_dtVperp2D(t *testing.T) {
 	v := detour.DtVperp2D(&v1, &v2)
 	detour.DtAssert(IsEquals(v, 6))
 }
+
+func Test_dtTriArea2D(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v3 := [3]float64{7, 8, 3}
+	v := detour.DtTriArea2D(&v1, &v2, &v3)
+	detour.DtAssert(IsEquals(v, 18))
+}
+
+func Test_dtOverlapQuantBounds(t *testing.T) {
+	amin := [3]uint16{1, 1, 1}
+	amax := [3]uint16{2, 1, 2}
+	bmin := [3]uint16{3, 1, 2}
+	bmax := [3]uint16{4, 1, 3}
+	v := detour.DtOverlapQuantBounds(&amin, &amax, &bmin, &bmax)
+	detour.DtAssert(v == false)
+}
+
+func Test_dtOverlapBounds(t *testing.T) {
+	amin := [3]float64{1, 1, 1}
+	amax := [3]float64{2, 1, 2}
+	bmin := [3]float64{1, 1, 1}
+	bmax := [3]float64{4, 1, 3}
+	v := detour.DtOverlapBounds(&amin, &amax, &bmin, &bmax)
+	detour.DtAssert(v == true)
+}
