@@ -206,5 +206,148 @@ func Test_dtVcross(t *testing.T) {
 	v2 := [3]float64{4, 5, 6}
 	dest := [3]float64{0, 0, 0}
 	detour.DtVcross(&dest, &v1, &v2)
-	detour.DtAssert(dest[0] == -3 && dest[1] == 6 && dest[2] == -3)
+	detour.DtAssert(IsEquals(dest[0], -3) && IsEquals(dest[1], 6) && IsEquals(dest[2], -3))
+}
+
+func Test_dtVdot(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVdot(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 32))
+}
+
+func Test_dtVmad(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	dest := [3]float64{0, 0, 0}
+	detour.DtVmad(&dest, &v1, &v2, 2)
+	detour.DtAssert(IsEquals(dest[0], 9) && IsEquals(dest[1], 12) && IsEquals(dest[2], 15))
+}
+
+func Test_dtVlerp(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	dest := [3]float64{0, 0, 0}
+	detour.DtVlerp(&dest, &v1, &v2, 0.2)
+	detour.DtAssert(IsEquals(dest[0], 1.6) && IsEquals(dest[1], 2.6) && IsEquals(dest[2], 3.6))
+}
+
+func Test_dtVadd(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	dest := [3]float64{0, 0, 0}
+	detour.DtVadd(&dest, &v1, &v2)
+	detour.DtAssert(IsEquals(dest[0], 5) && IsEquals(dest[1], 7) && IsEquals(dest[2], 9))
+}
+
+func Test_dtVsub(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	dest := [3]float64{0, 0, 0}
+	detour.DtVsub(&dest, &v1, &v2)
+	detour.DtAssert(IsEquals(dest[0], -3) && IsEquals(dest[1], -3) && IsEquals(dest[2], -3))
+}
+
+func Test_dtVscale(t *testing.T) {
+	v := [3]float64{1, 2, 3}
+	dest := [3]float64{0, 0, 0}
+	detour.DtVscale(&dest, &v, 2)
+	detour.DtAssert(IsEquals(dest[0], 2) && IsEquals(dest[1], 4) && IsEquals(dest[2], 6))
+}
+
+func Test_dtVmin(t *testing.T) {
+	v := [3]float64{1, 2, 3}
+	mn := [3]float64{-1, 3, 2}
+	detour.DtVmin(&mn, &v)
+	detour.DtAssert(IsEquals(mn[0], -1) && IsEquals(mn[1], 2) && IsEquals(mn[2], 2))
+}
+
+func Test_dtVmax(t *testing.T) {
+	v := [3]float64{1, 2, 3}
+	mx := [3]float64{-1, 3, 2}
+	detour.DtVmax(&mx, &v)
+	detour.DtAssert(IsEquals(mx[0], 1) && IsEquals(mx[1], 3) && IsEquals(mx[2], 3))
+}
+
+func Test_dtVset(t *testing.T) {
+	dest := [3]float64{0, 0, 0}
+	detour.DtVset(&dest, 1, 2, 3)
+	detour.DtAssert(IsEquals(dest[0], 1) && IsEquals(dest[1], 2) && IsEquals(dest[2], 3))
+}
+
+func Test_dtVcopy(t *testing.T) {
+	dest := [3]float64{0, 0, 0}
+	a := [3]float64{1, 2, 3}
+	detour.DtVcopy(&dest, &a)
+	detour.DtAssert(IsEquals(dest[0], 1) && IsEquals(dest[1], 2) && IsEquals(dest[2], 3))
+}
+
+func Test_dtVlen(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v := detour.DtVlen(&v1)
+	detour.DtAssert(IsEquals(v, 3.74166))
+}
+
+func Test_dtVlenSqr(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v := detour.DtVlenSqr(&v1)
+	detour.DtAssert(IsEquals(v, 14))
+}
+
+func Test_dtVdist(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVdist(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 5.19615))
+}
+
+func Test_dtVdistSqr(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVdistSqr(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 27))
+}
+
+func Test_dtVdist2D(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVdist2D(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 4.24264))
+}
+
+func Test_dtVdist2DSqr(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVdist2DSqr(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 18))
+}
+
+func Test_dtVnormalize(t *testing.T) {
+	v := [3]float64{1, 2, 3}
+	detour.DtVnormalize(&v)
+	detour.DtAssert(IsEquals(v[0], 0.26726) && IsEquals(v[1], 0.53452) && IsEquals(v[2], 0.80178))
+}
+
+func Test_dtVequal(t *testing.T) {
+	a := 1.1111
+	b := 2.2222
+	c := 3.3333
+	v1 := [3]float64{1.1111, 2.2222, 3.3333}
+	v2 := [3]float64{a, b, c}
+	v := detour.DtVequal(&v1, &v2)
+	detour.DtAssert(v)
+}
+
+func Test_dtVdot2D(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVdot2D(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 22))
+}
+
+func Test_dtVperp2D(t *testing.T) {
+	v1 := [3]float64{1, 2, 3}
+	v2 := [3]float64{4, 5, 6}
+	v := detour.DtVperp2D(&v1, &v2)
+	detour.DtAssert(IsEquals(v, 6))
 }
