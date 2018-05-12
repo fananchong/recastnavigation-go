@@ -12,8 +12,9 @@ func Test_dtAssert(t *testing.T) {
 	detour.DtAssertFailSetCustom(
 		func(expression bool) {
 			if !expression {
-				t.Logf("here!\n")
+				//t.Errorf("here!\n")
 			}
 		})
 	detour.DtAssert(false)
+	detour.DtAssertFailSetCustom(nil)
 }
