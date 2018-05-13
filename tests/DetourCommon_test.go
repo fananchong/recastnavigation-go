@@ -486,3 +486,114 @@ func Test_dtOverlapPolyPoly2D(t *testing.T) {
 	ok := detour.DtOverlapPolyPoly2D(polya[:], npolya, polyb[:], npolyb)
 	detour.DtAssert(ok)
 }
+
+func Test_dtNextPow2(t *testing.T) {
+	v := []uint32{
+		detour.DtNextPow2(0),
+		detour.DtNextPow2(1),
+		detour.DtNextPow2(2),
+		detour.DtNextPow2(3),
+		detour.DtNextPow2(4),
+		detour.DtNextPow2(5),
+		detour.DtNextPow2(6),
+		detour.DtNextPow2(7),
+		detour.DtNextPow2(8),
+		detour.DtNextPow2(9),
+		detour.DtNextPow2(10)}
+	detour.DtAssert(v[0] == 0 &&
+		v[1] == 1 &&
+		v[2] == 2 &&
+		v[3] == 4 &&
+		v[4] == 4 &&
+		v[5] == 8 &&
+		v[6] == 8 &&
+		v[7] == 8 &&
+		v[8] == 8 &&
+		v[9] == 16 &&
+		v[10] == 16)
+}
+
+func Test_dtIlog2(t *testing.T) {
+	v := []uint32{
+		detour.DtIlog2(0),
+		detour.DtIlog2(1),
+		detour.DtIlog2(2),
+		detour.DtIlog2(3),
+		detour.DtIlog2(4),
+		detour.DtIlog2(5),
+		detour.DtIlog2(6),
+		detour.DtIlog2(7),
+		detour.DtIlog2(8),
+		detour.DtIlog2(9),
+		detour.DtIlog2(10)}
+	detour.DtAssert(v[0] == 0 &&
+		v[1] == 0 &&
+		v[2] == 1 &&
+		v[3] == 1 &&
+		v[4] == 2 &&
+		v[5] == 2 &&
+		v[6] == 2 &&
+		v[7] == 2 &&
+		v[8] == 3 &&
+		v[9] == 3 &&
+		v[10] == 3)
+}
+
+func Test_dtAlign4(t *testing.T) {
+	v := []int{
+		detour.DtAlign4(0),
+		detour.DtAlign4(1),
+		detour.DtAlign4(2),
+		detour.DtAlign4(3),
+		detour.DtAlign4(4),
+		detour.DtAlign4(5),
+		detour.DtAlign4(6),
+		detour.DtAlign4(7),
+		detour.DtAlign4(8),
+		detour.DtAlign4(9),
+		detour.DtAlign4(10)}
+	detour.DtAssert(v[0] == 0 &&
+		v[1] == 4 &&
+		v[2] == 4 &&
+		v[3] == 4 &&
+		v[4] == 4 &&
+		v[5] == 8 &&
+		v[6] == 8 &&
+		v[7] == 8 &&
+		v[8] == 8 &&
+		v[9] == 12 &&
+		v[10] == 12)
+}
+
+func Test_dtOppositeTile(t *testing.T) {
+	v := []int{
+		detour.DtOppositeTile(0),
+		detour.DtOppositeTile(1),
+		detour.DtOppositeTile(2),
+		detour.DtOppositeTile(3),
+		detour.DtOppositeTile(4),
+		detour.DtOppositeTile(5),
+		detour.DtOppositeTile(6),
+		detour.DtOppositeTile(7),
+		detour.DtOppositeTile(8),
+		detour.DtOppositeTile(9),
+		detour.DtOppositeTile(10)}
+	detour.DtAssert(v[0] == 4 &&
+		v[1] == 5 &&
+		v[2] == 6 &&
+		v[3] == 7 &&
+		v[4] == 0 &&
+		v[5] == 1 &&
+		v[6] == 2 &&
+		v[7] == 3 &&
+		v[8] == 4 &&
+		v[9] == 5 &&
+		v[10] == 6)
+}
+
+func Test_dtSwapByte(t *testing.T) {
+	var a uint8 = 1
+	var b uint8 = 2
+	detour.DtSwapByte(&a, &b)
+	detour.DtAssert(a == 2 && b == 1)
+}

@@ -777,3 +777,69 @@ func DtOverlapPolyPoly2D(polya []float64, npolya int, polyb []float64, npolyb in
 	}
 	return true
 }
+
+/// @}
+/// @name Miscellanious functions.
+/// @{
+
+func DtNextPow2(v uint32) uint32 {
+	v--
+	v |= v >> 1
+	v |= v >> 2
+	v |= v >> 4
+	v |= v >> 8
+	v |= v >> 16
+	v++
+	return v
+}
+
+func DtIlog2(v uint32) uint32 {
+	var r, shift, temp uint32
+
+	if v > 0xffff {
+		temp = 1
+	} else {
+		temp = 0
+	}
+	r = temp << 4
+	v >>= r
+
+	if v > 0xff {
+		temp = 1
+	} else {
+		temp = 0
+	}
+	shift = temp << 3
+	v >>= shift
+	r |= shift
+
+	if v > 0xf {
+		temp = 1
+	} else {
+		temp = 0
+	}
+	shift = temp << 2
+	v >>= shift
+	r |= shift
+
+	if v > 0x3 {
+		temp = 1
+	} else {
+		temp = 0
+	}
+	shift = temp << 1
+	v >>= shift
+	r |= shift
+	r |= (v >> 1)
+	return r
+}
+
+func DtAlign4(x int) int { return (x + 3) & ^3 }
+
+func DtOppositeTile(side int) int { return (side + 4) & 0x7 }
+
+func DtSwapByte(a, b *uint8) {
+	tmp := *a
+	*a = *b
+	*b = tmp
+}
