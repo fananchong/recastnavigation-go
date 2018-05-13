@@ -377,3 +377,25 @@ func Test_dtOverlapBounds(t *testing.T) {
 	v := detour.DtOverlapBounds(&amin, &amax, &bmin, &bmax)
 	detour.DtAssert(v == true)
 }
+
+func Test_dtClosestPtPointTriangle(t *testing.T) {
+	closest := [3]float64{}
+	p := [3]float64{-1, 2, -1}
+	a := [3]float64{1, 2, 1}
+	b := [3]float64{3, 2, 1}
+	c := [3]float64{2, 2, 3}
+	detour.DtClosestPtPointTriangle(&closest, &p, &a, &b, &c)
+	detour.DtAssert(IsEquals(closest[0], 1) && IsEquals(closest[1], 2) && IsEquals(closest[2], 1))
+	p = [3]float64{4, 2, 0}
+	detour.DtClosestPtPointTriangle(&closest, &p, &a, &b, &c)
+	detour.DtAssert(IsEquals(closest[0], 3) && IsEquals(closest[1], 2) && IsEquals(closest[2], 1))
+	p = [3]float64{3, 2, 4}
+	detour.DtClosestPtPointTriangle(&closest, &p, &a, &b, &c)
+	detour.DtAssert(IsEquals(closest[0], 2) && IsEquals(closest[1], 2) && IsEquals(closest[2], 3))
+	p = [3]float64{2, 2, 0}
+	detour.DtClosestPtPointTriangle(&closest, &p, &a, &b, &c)
+	detour.DtAssert(IsEquals(closest[0], 2) && IsEquals(closest[1], 2) && IsEquals(closest[2], 1))
+	p = [3]float64{2, 2, 2}
+	detour.DtClosestPtPointTriangle(&closest, &p, &a, &b, &c)
+	detour.DtAssert(IsEquals(closest[0], 2) && IsEquals(closest[1], 2) && IsEquals(closest[2], 2))
+}

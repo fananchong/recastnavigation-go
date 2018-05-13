@@ -453,3 +453,89 @@ func DtOverlapQuantBounds(amin, amax, bmin, bmax *[3]uint16) bool {
 func DtOverlapBounds(amin, amax, bmin, bmax *[3]float64) bool {
 	return !(amin[0] > bmax[0] || amax[0] < bmin[0] || amin[1] > bmax[1] || amax[1] < bmin[1] || amin[2] > bmax[2] || amax[2] < bmin[2])
 }
+
+/// Derives the closest point on a triangle from the specified reference point.
+///  @param[out]	closest	The closest point on the triangle.
+///  @param[in]		p		The reference point from which to test. [(x, y, z)]
+///  @param[in]		a		Vertex A of triangle ABC. [(x, y, z)]
+///  @param[in]		b		Vertex B of triangle ABC. [(x, y, z)]
+///  @param[in]		c		Vertex C of triangle ABC. [(x, y, z)]
+func DtClosestPtPointTriangle(closest, p, a, b, c *[3]float64) {
+	// Check if P in vertex region outside A
+	ab := [3]float64{}
+	ac := [3]float64{}
+	ap := [3]float64{}
+	DtVsub(&ab, b, a)
+	DtVsub(&ac, c, a)
+	DtVsub(&ap, p, a)
+	d1 := DtVdot(&ab, &ap)
+	d2 := DtVdot(&ac, &ap)
+	if d1 <= 0.0 && d2 <= 0.0 {
+		// barycentric coordinates (1,0,0)
+		DtVcopy(closest, a)
+		return
+	}
+
+	// Check if P in vertex region outside B
+	bp := [3]float64{}
+	DtVsub(&bp, p, b)
+	d3 := DtVdot(&ab, &bp)
+	d4 := DtVdot(&ac, &bp)
+	if d3 >= 0.0 && d4 <= d3 {
+		// barycentric coordinates (0,1,0)
+		DtVcopy(closest, b)
+		return
+	}
+
+	// Check if P in edge region of AB, if so return projection of P onto AB
+	vc := d1*d4 - d3*d2
+	if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+		// barycentric coordinates (1-v,v,0)
+		v := d1 / (d1 - d3)
+		closest[0] = a[0] + v*ab[0]
+		closest[1] = a[1] + v*ab[1]
+		closest[2] = a[2] + v*ab[2]
+		return
+	}
+
+	// Check if P in vertex region outside C
+	cp := [3]float64{}
+	DtVsub(&cp, p, c)
+	d5 := DtVdot(&ab, &cp)
+	d6 := DtVdot(&ac, &cp)
+	if d6 >= 0.0 && d5 <= d6 {
+		// barycentric coordinates (0,0,1)
+		DtVcopy(closest, c)
+		return
+	}
+
+	// Check if P in edge region of AC, if so return projection of P onto AC
+	vb := d5*d2 - d1*d6
+	if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+		// barycentric coordinates (1-w,0,w)
+		w := d2 / (d2 - d6)
+		closest[0] = a[0] + w*ac[0]
+		closest[1] = a[1] + w*ac[1]
+		closest[2] = a[2] + w*ac[2]
+		return
+	}
+
+	// Check if P in edge region of BC, if so return projection of P onto BC
+	va := d3*d6 - d5*d4
+	if va <= 0.0 && (d4-d3) >= 0.0 && (d5-d6) >= 0.0 {
+		// barycentric coordinates (0,1-w,w)
+		w := (d4 - d3) / ((d4 - d3) + (d5 - d6))
+		closest[0] = b[0] + w*(c[0]-b[0])
+		closest[1] = b[1] + w*(c[1]-b[1])
+		closest[2] = b[2] + w*(c[2]-b[2])
+		return
+	}
+
+	// P inside face region. Compute Q through its barycentric coordinates (u,v,w)
+	denom := 1.0 / (va + vb + vc)
+	v := vb * denom
+	w := vc * denom
+	closest[0] = a[0] + ab[0]*v + ac[0]*w
+	closest[1] = a[1] + ab[1]*v + ac[1]*w
+	closest[2] = a[2] + ab[2]*v + ac[2]*w
+}
