@@ -429,3 +429,60 @@ func Test_dtIntersectSegmentPoly2D(t *testing.T) {
 	ok := detour.DtIntersectSegmentPoly2D(p0[:], p1[:], verts[:], nverts, &tmin, &tmax, &segMin, &segMax)
 	detour.DtAssert(ok && segMin == 3 && segMax == 1 && IsEquals(tmin, 2/6.0) && IsEquals(tmax, 5/6.0))
 }
+
+func Test_dtIntersectSegSeg2D(t *testing.T) {
+	ap := [3]float64{-1, 2, 1}
+	aq := [3]float64{4, 2, 1}
+	bp := [3]float64{0, 2, 0}
+	bq := [3]float64{3, 2, 3}
+	var s0, t0 float64
+	ok := detour.DtIntersectSegSeg2D(ap[:], aq[:], bp[:], bq[:], &s0, &t0)
+	detour.DtAssert(ok && IsEquals(s0, 2/5.0) && IsEquals(t0, 1/3.0))
+}
+
+func Test_dtPointInPolygon(t *testing.T) {
+	pt := [3]float64{2, 2, 1}
+	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	nverts := len(verts) / 3
+	ok := detour.DtPointInPolygon(pt[:], verts[:], nverts)
+	detour.DtAssert(ok)
+	pt = [3]float64{2, 2, 3}
+	ok = detour.DtPointInPolygon(pt[:], verts[:], nverts)
+	detour.DtAssert(ok == false)
+}
+
+func Test_dtDistancePtPolyEdgesSqr(t *testing.T) {
+	pt := [3]float64{2, 2, 1}
+	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	nverts := len(verts) / 3
+	ed := make([]float64, nverts)
+	et := make([]float64, nverts)
+	ok := detour.DtDistancePtPolyEdgesSqr(pt[:], verts[:], nverts, ed[:], et[:])
+	detour.DtAssert(ok &&
+		IsEquals(ed[0], 1) &&
+		IsEquals(ed[1], 4) &&
+		IsEquals(ed[2], 1) &&
+		IsEquals(ed[3], 1) &&
+		IsEquals(et[0], 0.3333333333333333) &&
+		IsEquals(et[1], 0.5) &&
+		IsEquals(et[2], 0.6666666666666666) &&
+		IsEquals(et[3], 0.5))
+}
+
+func Test_dtCalcPolyCenter(t *testing.T) {
+	tc := [3]float64{}
+	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	idx := [4]uint16{0, 1, 2, 3}
+	nidx := len(idx)
+	detour.DtCalcPolyCenter(tc[:], idx[:], nidx, verts[:])
+	detour.DtAssert(IsEquals(tc[0], 2.5) && IsEquals(tc[1], 2) && IsEquals(tc[2], 1))
+}
+
+func Test_dtOverlapPolyPoly2D(t *testing.T) {
+	polya := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	npolya := len(polya) / 3
+	polyb := [9]float64{2, 2, 1, 2.5, 2, 3, 4, 2, 1}
+	npolyb := len(polyb) / 3
+	ok := detour.DtOverlapPolyPoly2D(polya[:], npolya, polyb[:], npolyb)
+	detour.DtAssert(ok)
+}

@@ -600,7 +600,7 @@ func DtIntersectSegmentPoly2D(p0, p1, verts []float64, nverts int, tmin, tmax *f
 		DtVsub(diff[:], p0, verts[j*3:])
 		n := DtVperp2D(edge[:], diff[:])
 		d := DtVperp2D(dir[:], edge[:])
-		if math.Abs(d) < EPS {
+		if math.Abs(d) < 0.00000001 {
 			// S is nearly parallel to this edge
 			if n < 0 {
 				return false
@@ -632,5 +632,148 @@ func DtIntersectSegmentPoly2D(p0, p1, verts []float64, nverts int, tmin, tmax *f
 		}
 	}
 
+	return true
+}
+
+func vperpXZ(a, b []float64) float64 {
+	return a[0]*b[2] - a[2]*b[0]
+}
+
+func DtIntersectSegSeg2D(ap, aq, bp, bq []float64, s, t *float64) bool {
+	u := [3]float64{}
+	v := [3]float64{}
+	w := [3]float64{}
+	DtVsub(u[:], aq, ap)
+	DtVsub(v[:], bq, bp)
+	DtVsub(w[:], ap, bp)
+	d := vperpXZ(u[:], v[:])
+	if math.Abs(d) < 1e-6 {
+		return false
+	}
+	*s = vperpXZ(v[:], w[:]) / d
+	*t = vperpXZ(u[:], w[:]) / d
+	return true
+}
+
+/// Determines if the specified point is inside the convex polygon on the xz-plane.
+///  @param[in]		pt		The point to check. [(x, y, z)]
+///  @param[in]		verts	The polygon vertices. [(x, y, z) * @p nverts]
+///  @param[in]		nverts	The number of vertices. [Limit: >= 3]
+/// @return True if the point is inside the polygon.
+func DtPointInPolygon(pt, verts []float64, nverts int) bool {
+	var i, j int
+	c := false
+	for i, j = 0, nverts-1; i < nverts; j, i = i, i+1 {
+		vi := verts[i*3:]
+		vj := verts[j*3:]
+		if ((vi[2] > pt[2]) != (vj[2] > pt[2])) &&
+			(pt[0] < (vj[0]-vi[0])*(pt[2]-vi[2])/(vj[2]-vi[2])+vi[0]) {
+			c = !c
+		}
+	}
+	return c
+}
+
+func DtDistancePtSegSqr2D(pt, p, q []float64, t *float64) float64 {
+	pqx := q[0] - p[0]
+	pqz := q[2] - p[2]
+	dx := pt[0] - p[0]
+	dz := pt[2] - p[2]
+	d := pqx*pqx + pqz*pqz
+	*t = pqx*dx + pqz*dz
+	if d > 0 {
+		*t /= d
+	}
+	if *t < 0 {
+		*t = 0
+	} else if *t > 1 {
+		*t = 1
+	}
+	dx = p[0] + (*t)*pqx - pt[0]
+	dz = p[2] + (*t)*pqz - pt[2]
+	return dx*dx + dz*dz
+}
+
+func DtDistancePtPolyEdgesSqr(pt, verts []float64, nverts int, ed, et []float64) bool {
+	var i, j int
+	c := false
+	for i, j = 0, nverts-1; i < nverts; j, i = i, i+1 {
+		vi := verts[i*3:]
+		vj := verts[j*3:]
+		if ((vi[2] > pt[2]) != (vj[2] > pt[2])) &&
+			(pt[0] < (vj[0]-vi[0])*(pt[2]-vi[2])/(vj[2]-vi[2])+vi[0]) {
+			c = !c
+		}
+		ed[j] = DtDistancePtSegSqr2D(pt, vj, vi, &et[j])
+	}
+	return c
+}
+
+/// Derives the centroid of a convex polygon.
+///  @param[out]	tc		The centroid of the polgyon. [(x, y, z)]
+///  @param[in]		idx		The polygon indices. [(vertIndex) * @p nidx]
+///  @param[in]		nidx	The number of indices in the polygon. [Limit: >= 3]
+///  @param[in]		verts	The polygon vertices. [(x, y, z) * vertCount]
+func DtCalcPolyCenter(tc []float64, idx []uint16, nidx int, verts []float64) {
+	tc[0] = 0.0
+	tc[1] = 0.0
+	tc[2] = 0.0
+	for j := 0; j < nidx; j++ {
+		v := verts[idx[j]*3:]
+		tc[0] += v[0]
+		tc[1] += v[1]
+		tc[2] += v[2]
+	}
+	s := 1.0 / float64(nidx)
+	tc[0] *= s
+	tc[1] *= s
+	tc[2] *= s
+}
+
+func projectPoly(axis, poly []float64, npoly int, rmin, rmax *float64) {
+	*rmax = DtVdot2D(axis, poly)
+	*rmin = *rmax
+	for i := 1; i < npoly; i++ {
+		d := DtVdot2D(axis, poly[i*3:])
+		*rmin = DtMinFloat64(*rmin, d)
+		*rmax = DtMaxFloat64(*rmax, d)
+	}
+}
+
+func overlapRange(amin, amax, bmin, bmax, eps float64) bool {
+	return !((amin+eps) > bmax || (amax-eps) < bmin)
+}
+
+/// Determines if the two convex polygons overlap on the xz-plane.
+///  @param[in]		polya		Polygon A vertices.	[(x, y, z) * @p npolya]
+///  @param[in]		npolya		The number of vertices in polygon A.
+///  @param[in]		polyb		Polygon B vertices.	[(x, y, z) * @p npolyb]
+///  @param[in]		npolyb		The number of vertices in polygon B.
+/// @return True if the two polygons overlap.
+func DtOverlapPolyPoly2D(polya []float64, npolya int, polyb []float64, npolyb int) bool {
+	for i, j := 0, npolya-1; i < npolya; j, i = i, i+1 {
+		va := polya[j*3:]
+		vb := polya[i*3:]
+		n := [3]float64{vb[2] - va[2], 0, -(vb[0] - va[0])}
+		var amin, amax, bmin, bmax float64
+		projectPoly(n[:], polya, npolya, &amin, &amax)
+		projectPoly(n[:], polyb, npolyb, &bmin, &bmax)
+		if !overlapRange(amin, amax, bmin, bmax, EPS) {
+			// Found separating axis
+			return false
+		}
+	}
+	for i, j := 0, npolyb-1; i < npolyb; j, i = i, i+1 {
+		va := polyb[j*3:]
+		vb := polyb[i*3:]
+		n := [3]float64{vb[2] - va[2], 0, -(vb[0] - va[0])}
+		var amin, amax, bmin, bmax float64
+		projectPoly(n[:], polya, npolya, &amin, &amax)
+		projectPoly(n[:], polyb, npolyb, &bmin, &bmax)
+		if !overlapRange(amin, amax, bmin, bmax, EPS) {
+			// Found separating axis
+			return false
+		}
+	}
 	return true
 }
