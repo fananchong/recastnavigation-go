@@ -1,5 +1,9 @@
 package detour
 
+import (
+	"math"
+)
+
 /**
 @defgroup detour Detour
 
@@ -210,7 +214,7 @@ func DtClampInt16(v, mn, mx int16) int16 {
 ///  @param[out]	dest	The cross product. [(x, y, z)]
 ///  @param[in]		v1		A Vector [(x, y, z)]
 ///  @param[in]		v2		A vector [(x, y, z)]
-func DtVcross(dest, v1, v2 *[3]float64) {
+func DtVcross(dest, v1, v2 []float64) {
 	dest[0] = v1[1]*v2[2] - v1[2]*v2[1]
 	dest[1] = v1[2]*v2[0] - v1[0]*v2[2]
 	dest[2] = v1[0]*v2[1] - v1[1]*v2[0]
@@ -220,7 +224,7 @@ func DtVcross(dest, v1, v2 *[3]float64) {
 ///  @param[in]		v1	A Vector [(x, y, z)]
 ///  @param[in]		v2	A vector [(x, y, z)]
 /// @return The dot product.
-func DtVdot(v1, v2 *[3]float64) float64 {
+func DtVdot(v1, v2 []float64) float64 {
 	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
 }
 
@@ -229,7 +233,7 @@ func DtVdot(v1, v2 *[3]float64) float64 {
 ///  @param[in]		v1		The base vector. [(x, y, z)]
 ///  @param[in]		v2		The vector to scale and add to @p v1. [(x, y, z)]
 ///  @param[in]		s		The amount to scale @p v2 by before adding to @p v1.
-func DtVmad(dest, v1, v2 *[3]float64, s float64) {
+func DtVmad(dest, v1, v2 []float64, s float64) {
 	dest[0] = v1[0] + v2[0]*s
 	dest[1] = v1[1] + v2[1]*s
 	dest[2] = v1[2] + v2[2]*s
@@ -240,7 +244,7 @@ func DtVmad(dest, v1, v2 *[3]float64, s float64) {
 ///  @param[in]		v1		The starting vector.
 ///  @param[in]		v2		The destination vector.
 ///	 @param[in]		t		The interpolation factor. [Limits: 0 <= value <= 1.0]
-func DtVlerp(dest, v1, v2 *[3]float64, t float64) {
+func DtVlerp(dest, v1, v2 []float64, t float64) {
 	dest[0] = v1[0] + (v2[0]-v1[0])*t
 	dest[1] = v1[1] + (v2[1]-v1[1])*t
 	dest[2] = v1[2] + (v2[2]-v1[2])*t
@@ -250,7 +254,7 @@ func DtVlerp(dest, v1, v2 *[3]float64, t float64) {
 ///  @param[out]	dest	The result vector. [(x, y, z)]
 ///  @param[in]		v1		The base vector. [(x, y, z)]
 ///  @param[in]		v2		The vector to add to @p v1. [(x, y, z)]
-func DtVadd(dest, v1, v2 *[3]float64) {
+func DtVadd(dest, v1, v2 []float64) {
 	dest[0] = v1[0] + v2[0]
 	dest[1] = v1[1] + v2[1]
 	dest[2] = v1[2] + v2[2]
@@ -260,7 +264,7 @@ func DtVadd(dest, v1, v2 *[3]float64) {
 ///  @param[out]	dest	The result vector. [(x, y, z)]
 ///  @param[in]		v1		The base vector. [(x, y, z)]
 ///  @param[in]		v2		The vector to subtract from @p v1. [(x, y, z)]
-func DtVsub(dest, v1, v2 *[3]float64) {
+func DtVsub(dest, v1, v2 []float64) {
 	dest[0] = v1[0] - v2[0]
 	dest[1] = v1[1] - v2[1]
 	dest[2] = v1[2] - v2[2]
@@ -270,7 +274,7 @@ func DtVsub(dest, v1, v2 *[3]float64) {
 ///  @param[out]	dest	The result vector. [(x, y, z)]
 ///  @param[in]		v		The vector to scale. [(x, y, z)]
 ///  @param[in]		t		The scaling factor.
-func DtVscale(dest, v *[3]float64, t float64) {
+func DtVscale(dest, v []float64, t float64) {
 	dest[0] = v[0] * t
 	dest[1] = v[1] * t
 	dest[2] = v[2] * t
@@ -279,7 +283,7 @@ func DtVscale(dest, v *[3]float64, t float64) {
 /// Selects the minimum value of each element from the specified vectors.
 ///  @param[in,out]	mn	A vector.  (Will be updated with the result.) [(x, y, z)]
 ///  @param[in]	v	A vector. [(x, y, z)]
-func DtVmin(mn, v *[3]float64) {
+func DtVmin(mn, v []float64) {
 	mn[0] = DtMinFloat64(mn[0], v[0])
 	mn[1] = DtMinFloat64(mn[1], v[1])
 	mn[2] = DtMinFloat64(mn[2], v[2])
@@ -288,7 +292,7 @@ func DtVmin(mn, v *[3]float64) {
 /// Selects the maximum value of each element from the specified vectors.
 ///  @param[in,out]	mx	A vector.  (Will be updated with the result.) [(x, y, z)]
 ///  @param[in]		v	A vector. [(x, y, z)]
-func DtVmax(mx, v *[3]float64) {
+func DtVmax(mx, v []float64) {
 	mx[0] = DtMaxFloat64(mx[0], v[0])
 	mx[1] = DtMaxFloat64(mx[1], v[1])
 	mx[2] = DtMaxFloat64(mx[2], v[2])
@@ -299,7 +303,7 @@ func DtVmax(mx, v *[3]float64) {
 ///  @param[in]		x		The x-value of the vector.
 ///  @param[in]		y		The y-value of the vector.
 ///  @param[in]		z		The z-value of the vector.
-func DtVset(dest *[3]float64, x, y, z float64) {
+func DtVset(dest []float64, x, y, z float64) {
 	dest[0] = x
 	dest[1] = y
 	dest[2] = z
@@ -308,7 +312,7 @@ func DtVset(dest *[3]float64, x, y, z float64) {
 /// Performs a vector copy.
 ///  @param[out]	dest	The result. [(x, y, z)]
 ///  @param[in]		a		The vector to copy. [(x, y, z)]
-func DtVcopy(dest, a *[3]float64) {
+func DtVcopy(dest, a []float64) {
 	dest[0] = a[0]
 	dest[1] = a[1]
 	dest[2] = a[2]
@@ -317,14 +321,14 @@ func DtVcopy(dest, a *[3]float64) {
 /// Derives the scalar length of the vector.
 ///  @param[in]		v The vector. [(x, y, z)]
 /// @return The scalar length of the vector.
-func DtVlen(v *[3]float64) float64 {
+func DtVlen(v []float64) float64 {
 	return DtMathSqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
 }
 
 /// Derives the square of the scalar length of the vector. (len * len)
 ///  @param[in]		v The vector. [(x, y, z)]
 /// @return The square of the scalar length of the vector.
-func DtVlenSqr(v *[3]float64) float64 {
+func DtVlenSqr(v []float64) float64 {
 	return v[0]*v[0] + v[1]*v[1] + v[2]*v[2]
 }
 
@@ -332,7 +336,7 @@ func DtVlenSqr(v *[3]float64) float64 {
 ///  @param[in]		v1	A point. [(x, y, z)]
 ///  @param[in]		v2	A point. [(x, y, z)]
 /// @return The distance between the two points.
-func DtVdist(v1, v2 *[3]float64) float64 {
+func DtVdist(v1, v2 []float64) float64 {
 	dx := v2[0] - v1[0]
 	dy := v2[1] - v1[1]
 	dz := v2[2] - v1[2]
@@ -343,7 +347,7 @@ func DtVdist(v1, v2 *[3]float64) float64 {
 ///  @param[in]		v1	A point. [(x, y, z)]
 ///  @param[in]		v2	A point. [(x, y, z)]
 /// @return The square of the distance between the two points.
-func DtVdistSqr(v1, v2 *[3]float64) float64 {
+func DtVdistSqr(v1, v2 []float64) float64 {
 	dx := v2[0] - v1[0]
 	dy := v2[1] - v1[1]
 	dz := v2[2] - v1[2]
@@ -356,7 +360,7 @@ func DtVdistSqr(v1, v2 *[3]float64) float64 {
 /// @return The distance between the point on the xz-plane.
 ///
 /// The vectors are projected onto the xz-plane, so the y-values are ignored.
-func DtVdist2D(v1, v2 *[3]float64) float64 {
+func DtVdist2D(v1, v2 []float64) float64 {
 	dx := v2[0] - v1[0]
 	dz := v2[2] - v1[2]
 	return DtMathSqrtf(dx*dx + dz*dz)
@@ -366,7 +370,7 @@ func DtVdist2D(v1, v2 *[3]float64) float64 {
 ///  @param[in]		v1	A point. [(x, y, z)]
 ///  @param[in]		v2	A point. [(x, y, z)]
 /// @return The square of the distance between the point on the xz-plane.
-func DtVdist2DSqr(v1, v2 *[3]float64) float64 {
+func DtVdist2DSqr(v1, v2 []float64) float64 {
 	dx := v2[0] - v1[0]
 	dz := v2[2] - v1[2]
 	return dx*dx + dz*dz
@@ -374,7 +378,7 @@ func DtVdist2DSqr(v1, v2 *[3]float64) float64 {
 
 /// Normalizes the vector.
 ///  @param[in,out]	v	The vector to normalize. [(x, y, z)]
-func DtVnormalize(v *[3]float64) {
+func DtVnormalize(v []float64) {
 	d := 1.0 / DtMathSqrtf(DtSqrFloat64(v[0])+DtSqrFloat64(v[1])+DtSqrFloat64(v[2]))
 	v[0] *= d
 	v[1] *= d
@@ -390,7 +394,7 @@ var thr float64 = DtSqrFloat64(1.0 / 16384.0)
 ///
 /// Basically, this function will return true if the specified points are
 /// close enough to eachother to be considered colocated.
-func DtVequal(p0, p1 *[3]float64) bool {
+func DtVequal(p0, p1 []float64) bool {
 	d := DtVdistSqr(p0, p1)
 	return d < thr
 }
@@ -401,7 +405,7 @@ func DtVequal(p0, p1 *[3]float64) bool {
 /// @return The dot product on the xz-plane.
 ///
 /// The vectors are projected onto the xz-plane, so the y-values are ignored.
-func DtVdot2D(u, v *[3]float64) float64 {
+func DtVdot2D(u, v []float64) float64 {
 	return u[0]*v[0] + u[2]*v[2]
 }
 
@@ -411,7 +415,7 @@ func DtVdot2D(u, v *[3]float64) float64 {
 /// @return The dot product on the xz-plane.
 ///
 /// The vectors are projected onto the xz-plane, so the y-values are ignored.
-func DtVperp2D(u, v *[3]float64) float64 {
+func DtVperp2D(u, v []float64) float64 {
 	return u[2]*v[0] - u[0]*v[2]
 }
 
@@ -424,7 +428,7 @@ func DtVperp2D(u, v *[3]float64) float64 {
 ///  @param[in]		b		Vertex B. [(x, y, z)]
 ///  @param[in]		c		Vertex C. [(x, y, z)]
 /// @return The signed xz-plane area of the triangle.
-func DtTriArea2D(a, b, c *[3]float64) float64 {
+func DtTriArea2D(a, b, c []float64) float64 {
 	abx := b[0] - a[0]
 	abz := b[2] - a[2]
 	acx := c[0] - a[0]
@@ -439,7 +443,7 @@ func DtTriArea2D(a, b, c *[3]float64) float64 {
 ///  @param[in]		bmax	Maximum bounds of box B. [(x, y, z)]
 /// @return True if the two AABB's overlap.
 /// @see dtOverlapBounds
-func DtOverlapQuantBounds(amin, amax, bmin, bmax *[3]uint16) bool {
+func DtOverlapQuantBounds(amin, amax, bmin, bmax []uint16) bool {
 	return !(amin[0] > bmax[0] || amax[0] < bmin[0] || amin[1] > bmax[1] || amax[1] < bmin[1] || amin[2] > bmax[2] || amax[2] < bmin[2])
 }
 
@@ -450,7 +454,7 @@ func DtOverlapQuantBounds(amin, amax, bmin, bmax *[3]uint16) bool {
 ///  @param[in]		bmax	Maximum bounds of box B. [(x, y, z)]
 /// @return True if the two AABB's overlap.
 /// @see dtOverlapQuantBounds
-func DtOverlapBounds(amin, amax, bmin, bmax *[3]float64) bool {
+func DtOverlapBounds(amin, amax, bmin, bmax []float64) bool {
 	return !(amin[0] > bmax[0] || amax[0] < bmin[0] || amin[1] > bmax[1] || amax[1] < bmin[1] || amin[2] > bmax[2] || amax[2] < bmin[2])
 }
 
@@ -460,16 +464,16 @@ func DtOverlapBounds(amin, amax, bmin, bmax *[3]float64) bool {
 ///  @param[in]		a		Vertex A of triangle ABC. [(x, y, z)]
 ///  @param[in]		b		Vertex B of triangle ABC. [(x, y, z)]
 ///  @param[in]		c		Vertex C of triangle ABC. [(x, y, z)]
-func DtClosestPtPointTriangle(closest, p, a, b, c *[3]float64) {
+func DtClosestPtPointTriangle(closest, p, a, b, c []float64) {
 	// Check if P in vertex region outside A
 	ab := [3]float64{}
 	ac := [3]float64{}
 	ap := [3]float64{}
-	DtVsub(&ab, b, a)
-	DtVsub(&ac, c, a)
-	DtVsub(&ap, p, a)
-	d1 := DtVdot(&ab, &ap)
-	d2 := DtVdot(&ac, &ap)
+	DtVsub(ab[:], b, a)
+	DtVsub(ac[:], c, a)
+	DtVsub(ap[:], p, a)
+	d1 := DtVdot(ab[:], ap[:])
+	d2 := DtVdot(ac[:], ap[:])
 	if d1 <= 0.0 && d2 <= 0.0 {
 		// barycentric coordinates (1,0,0)
 		DtVcopy(closest, a)
@@ -478,9 +482,9 @@ func DtClosestPtPointTriangle(closest, p, a, b, c *[3]float64) {
 
 	// Check if P in vertex region outside B
 	bp := [3]float64{}
-	DtVsub(&bp, p, b)
-	d3 := DtVdot(&ab, &bp)
-	d4 := DtVdot(&ac, &bp)
+	DtVsub(bp[:], p, b)
+	d3 := DtVdot(ab[:], bp[:])
+	d4 := DtVdot(ac[:], bp[:])
 	if d3 >= 0.0 && d4 <= d3 {
 		// barycentric coordinates (0,1,0)
 		DtVcopy(closest, b)
@@ -500,9 +504,9 @@ func DtClosestPtPointTriangle(closest, p, a, b, c *[3]float64) {
 
 	// Check if P in vertex region outside C
 	cp := [3]float64{}
-	DtVsub(&cp, p, c)
-	d5 := DtVdot(&ab, &cp)
-	d6 := DtVdot(&ac, &cp)
+	DtVsub(cp[:], p, c)
+	d5 := DtVdot(ab[:], cp[:])
+	d6 := DtVdot(ac[:], cp[:])
 	if d6 >= 0.0 && d5 <= d6 {
 		// barycentric coordinates (0,0,1)
 		DtVcopy(closest, c)
@@ -538,4 +542,95 @@ func DtClosestPtPointTriangle(closest, p, a, b, c *[3]float64) {
 	closest[0] = a[0] + ab[0]*v + ac[0]*w
 	closest[1] = a[1] + ab[1]*v + ac[1]*w
 	closest[2] = a[2] + ab[2]*v + ac[2]*w
+}
+
+var EPS float64 = 1e-4
+
+/// Derives the y-axis height of the closest point on the triangle from the specified reference point.
+///  @param[in]		p		The reference point from which to test. [(x, y, z)]
+///  @param[in]		a		Vertex A of triangle ABC. [(x, y, z)]
+///  @param[in]		b		Vertex B of triangle ABC. [(x, y, z)]
+///  @param[in]		c		Vertex C of triangle ABC. [(x, y, z)]
+///  @param[out]	h		The resulting height.
+func DtClosestHeightPointTriangle(p, a, b, c []float64, h *float64) bool {
+	v0 := [3]float64{}
+	v1 := [3]float64{}
+	v2 := [3]float64{}
+	DtVsub(v0[:], c, a)
+	DtVsub(v1[:], b, a)
+	DtVsub(v2[:], p, a)
+
+	dot00 := DtVdot2D(v0[:], v0[:])
+	dot01 := DtVdot2D(v0[:], v1[:])
+	dot02 := DtVdot2D(v0[:], v2[:])
+	dot11 := DtVdot2D(v1[:], v1[:])
+	dot12 := DtVdot2D(v1[:], v2[:])
+
+	// Compute barycentric coordinates
+	invDenom := 1.0 / (dot00*dot11 - dot01*dot01)
+	u := (dot11*dot02 - dot01*dot12) * invDenom
+	v := (dot00*dot12 - dot01*dot02) * invDenom
+
+	// The (sloppy) epsilon is needed to allow to get height of points which
+	// are interpolated along the edges of the triangles.
+	//	static const float EPS = 1e-4f;
+
+	// If point lies inside the triangle, return interpolated ycoord.
+	if u >= -EPS && v >= -EPS && (u+v) <= 1+EPS {
+		*h = a[1] + v0[1]*u + v1[1]*v
+		return true
+	}
+
+	return false
+}
+
+func DtIntersectSegmentPoly2D(p0, p1, verts []float64, nverts int, tmin, tmax *float64, segMin, segMax *int) bool {
+	*tmin = 0
+	*tmax = 1
+	*segMin = -1
+	*segMax = -1
+
+	dir := [3]float64{}
+	DtVsub(dir[:], p1, p0)
+
+	for i, j := 0, nverts-1; i < nverts; j, i = i, i+1 {
+		edge := [3]float64{}
+		diff := [3]float64{}
+		DtVsub(edge[:], verts[i*3:], verts[j*3:])
+		DtVsub(diff[:], p0, verts[j*3:])
+		n := DtVperp2D(edge[:], diff[:])
+		d := DtVperp2D(dir[:], edge[:])
+		if math.Abs(d) < EPS {
+			// S is nearly parallel to this edge
+			if n < 0 {
+				return false
+			} else {
+				continue
+			}
+		}
+		t := n / d
+		if d < 0 {
+			// segment S is entering across this edge
+			if t > *tmin {
+				*tmin = t
+				*segMin = j
+				// S enters after leaving polygon
+				if *tmin > *tmax {
+					return false
+				}
+			}
+		} else {
+			// segment S is leaving across this edge
+			if t < *tmax {
+				*tmax = t
+				*segMax = j
+				// S leaves before entering polygon
+				if *tmax < *tmin {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
 }
