@@ -281,16 +281,18 @@ type DtNavMesh struct {
 	m_polyBits uint32 ///< Number of poly bits in the tile ID.
 }
 
+/// Allocates a navigation mesh object using the Detour allocator.
+/// @return A navigation mesh that is ready for initialization, or null on failure.
+///  @ingroup detour
 func DtAllocNavMesh() *DtNavMesh {
 	navmesh := &DtNavMesh{}
 	navmesh.constructor()
 	return navmesh
 }
 
-/// @par
-///
-/// This function will only free the memory for tiles with the #DT_TILE_FREE_DATA
-/// flag set.
+/// Frees the specified navigation mesh object using the Detour allocator.
+///  @param[in]	navmesh		A navigation mesh allocated using #dtAllocNavMesh
+///  @ingroup detour
 func DtFreeNavMesh(navmesh *DtNavMesh) {
 	if navmesh == nil {
 		return
