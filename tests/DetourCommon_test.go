@@ -8,9 +8,9 @@ import (
 
 func Test_dtSwap(t *testing.T) {
 	{
-		var a float64 = 1
-		var b float64 = 2
-		detour.DtSwapFloat64(&a, &b)
+		var a float32 = 1
+		var b float32 = 2
+		detour.DtSwapFloat32(&a, &b)
 		detour.DtAssert(IsEquals(a, 2) && IsEquals(b, 1))
 	}
 
@@ -42,9 +42,9 @@ func Test_dtSwap(t *testing.T) {
 
 func Test_dtMin(t *testing.T) {
 	{
-		var a float64 = 1
-		var b float64 = 2
-		c := detour.DtMinFloat64(a, b)
+		var a float32 = 1
+		var b float32 = 2
+		c := detour.DtMinFloat32(a, b)
 		detour.DtAssert(IsEquals(c, 1))
 	}
 	{
@@ -75,9 +75,9 @@ func Test_dtMin(t *testing.T) {
 
 func Test_dtMax(t *testing.T) {
 	{
-		var a float64 = 1
-		var b float64 = 2
-		c := detour.DtMaxFloat64(a, b)
+		var a float32 = 1
+		var b float32 = 2
+		c := detour.DtMaxFloat32(a, b)
 		detour.DtAssert(IsEquals(c, 2))
 	}
 	{
@@ -108,10 +108,10 @@ func Test_dtMax(t *testing.T) {
 
 func Test_dtAbs(t *testing.T) {
 	{
-		var a1 float64 = -1
-		var b1 float64 = 1
-		a2 := detour.DtAbsFloat64(a1)
-		b2 := detour.DtAbsFloat64(b1)
+		var a1 float32 = -1
+		var b1 float32 = 1
+		a2 := detour.DtAbsFloat32(a1)
+		b2 := detour.DtAbsFloat32(b1)
 		detour.DtAssert(IsEquals(a2, 1) && IsEquals(b2, 1))
 	}
 	{
@@ -132,8 +132,8 @@ func Test_dtAbs(t *testing.T) {
 
 func Test_dtSqr(t *testing.T) {
 	{
-		var b float64 = 2
-		c := detour.DtSqrFloat64(b)
+		var b float32 = 2
+		c := detour.DtSqrFloat32(b)
 		detour.DtAssert(IsEquals(c, 4))
 	}
 	{
@@ -160,9 +160,9 @@ func Test_dtSqr(t *testing.T) {
 
 func Test_dtClamp(t *testing.T) {
 	{
-		a := detour.DtClampFloat64(0, 1, 3)
-		b := detour.DtClampFloat64(2, 1, 3)
-		c := detour.DtClampFloat64(4, 1, 3)
+		a := detour.DtClampFloat32(0, 1, 3)
+		b := detour.DtClampFloat32(2, 1, 3)
+		c := detour.DtClampFloat32(4, 1, 3)
 		detour.DtAssert(IsEquals(a, 1))
 		detour.DtAssert(IsEquals(b, 2))
 		detour.DtAssert(IsEquals(c, 3))
@@ -202,160 +202,160 @@ func Test_dtClamp(t *testing.T) {
 }
 
 func Test_dtVcross(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
-	dest := [3]float64{}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
+	dest := [3]float32{}
 	detour.DtVcross(dest[:], v1[:], v2[:])
 	detour.DtAssert(IsEquals(dest[0], -3) && IsEquals(dest[1], 6) && IsEquals(dest[2], -3))
 }
 
 func Test_dtVdot(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVdot(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 32))
 }
 
 func Test_dtVmad(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
-	dest := [3]float64{}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
+	dest := [3]float32{}
 	detour.DtVmad(dest[:], v1[:], v2[:], 2)
 	detour.DtAssert(IsEquals(dest[0], 9) && IsEquals(dest[1], 12) && IsEquals(dest[2], 15))
 }
 
 func Test_dtVlerp(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
-	dest := [3]float64{}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
+	dest := [3]float32{}
 	detour.DtVlerp(dest[:], v1[:], v2[:], 0.2)
 	detour.DtAssert(IsEquals(dest[0], 1.6) && IsEquals(dest[1], 2.6) && IsEquals(dest[2], 3.6))
 }
 
 func Test_dtVadd(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
-	dest := [3]float64{}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
+	dest := [3]float32{}
 	detour.DtVadd(dest[:], v1[:], v2[:])
 	detour.DtAssert(IsEquals(dest[0], 5) && IsEquals(dest[1], 7) && IsEquals(dest[2], 9))
 }
 
 func Test_dtVsub(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
-	dest := [3]float64{}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
+	dest := [3]float32{}
 	detour.DtVsub(dest[:], v1[:], v2[:])
 	detour.DtAssert(IsEquals(dest[0], -3) && IsEquals(dest[1], -3) && IsEquals(dest[2], -3))
 }
 
 func Test_dtVscale(t *testing.T) {
-	v := [3]float64{1, 2, 3}
-	dest := [3]float64{}
+	v := [3]float32{1, 2, 3}
+	dest := [3]float32{}
 	detour.DtVscale(dest[:], v[:], 2)
 	detour.DtAssert(IsEquals(dest[0], 2) && IsEquals(dest[1], 4) && IsEquals(dest[2], 6))
 }
 
 func Test_dtVmin(t *testing.T) {
-	v := [3]float64{1, 2, 3}
-	mn := [3]float64{-1, 3, 2}
+	v := [3]float32{1, 2, 3}
+	mn := [3]float32{-1, 3, 2}
 	detour.DtVmin(mn[:], v[:])
 	detour.DtAssert(IsEquals(mn[0], -1) && IsEquals(mn[1], 2) && IsEquals(mn[2], 2))
 }
 
 func Test_dtVmax(t *testing.T) {
-	v := [3]float64{1, 2, 3}
-	mx := [3]float64{-1, 3, 2}
+	v := [3]float32{1, 2, 3}
+	mx := [3]float32{-1, 3, 2}
 	detour.DtVmax(mx[:], v[:])
 	detour.DtAssert(IsEquals(mx[0], 1) && IsEquals(mx[1], 3) && IsEquals(mx[2], 3))
 }
 
 func Test_dtVset(t *testing.T) {
-	dest := [3]float64{}
+	dest := [3]float32{}
 	detour.DtVset(dest[:], 1, 2, 3)
 	detour.DtAssert(IsEquals(dest[0], 1) && IsEquals(dest[1], 2) && IsEquals(dest[2], 3))
 }
 
 func Test_dtVcopy(t *testing.T) {
-	dest := [3]float64{}
-	a := [3]float64{1, 2, 3}
+	dest := [3]float32{}
+	a := [3]float32{1, 2, 3}
 	detour.DtVcopy(dest[:], a[:])
 	detour.DtAssert(IsEquals(dest[0], 1) && IsEquals(dest[1], 2) && IsEquals(dest[2], 3))
 }
 
 func Test_dtVlen(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
+	v1 := [3]float32{1, 2, 3}
 	v := detour.DtVlen(v1[:])
 	detour.DtAssert(IsEquals(v, 3.74166))
 }
 
 func Test_dtVlenSqr(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
+	v1 := [3]float32{1, 2, 3}
 	v := detour.DtVlenSqr(v1[:])
 	detour.DtAssert(IsEquals(v, 14))
 }
 
 func Test_dtVdist(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVdist(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 5.19615))
 }
 
 func Test_dtVdistSqr(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVdistSqr(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 27))
 }
 
 func Test_dtVdist2D(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVdist2D(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 4.24264))
 }
 
 func Test_dtVdist2DSqr(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVdist2DSqr(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 18))
 }
 
 func Test_dtVnormalize(t *testing.T) {
-	v := [3]float64{1, 2, 3}
+	v := [3]float32{1, 2, 3}
 	detour.DtVnormalize(v[:])
 	detour.DtAssert(IsEquals(v[0], 0.26726) && IsEquals(v[1], 0.53452) && IsEquals(v[2], 0.80178))
 }
 
 func Test_dtVequal(t *testing.T) {
-	a := 1.1111
-	b := 2.2222
-	c := 3.3333
-	v1 := [3]float64{1.1111, 2.2222, 3.3333}
-	v2 := [3]float64{a, b, c}
+	var a float32 = 1.1111
+	var b float32 = 2.2222
+	var c float32 = 3.3333
+	v1 := [3]float32{1.1111, 2.2222, 3.3333}
+	v2 := [3]float32{a, b, c}
 	v := detour.DtVequal(v1[:], v2[:])
 	detour.DtAssert(v)
 }
 
 func Test_dtVdot2D(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVdot2D(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 22))
 }
 
 func Test_dtVperp2D(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
 	v := detour.DtVperp2D(v1[:], v2[:])
 	detour.DtAssert(IsEquals(v, 6))
 }
 
 func Test_dtTriArea2D(t *testing.T) {
-	v1 := [3]float64{1, 2, 3}
-	v2 := [3]float64{4, 5, 6}
-	v3 := [3]float64{7, 8, 3}
+	v1 := [3]float32{1, 2, 3}
+	v2 := [3]float32{4, 5, 6}
+	v3 := [3]float32{7, 8, 3}
 	v := detour.DtTriArea2D(v1[:], v2[:], v3[:])
 	detour.DtAssert(IsEquals(v, 18))
 }
@@ -370,42 +370,42 @@ func Test_dtOverlapQuantBounds(t *testing.T) {
 }
 
 func Test_dtOverlapBounds(t *testing.T) {
-	amin := [3]float64{1, 1, 1}
-	amax := [3]float64{2, 1, 2}
-	bmin := [3]float64{1, 1, 1}
-	bmax := [3]float64{4, 1, 3}
+	amin := [3]float32{1, 1, 1}
+	amax := [3]float32{2, 1, 2}
+	bmin := [3]float32{1, 1, 1}
+	bmax := [3]float32{4, 1, 3}
 	v := detour.DtOverlapBounds(amin[:], amax[:], bmin[:], bmax[:])
 	detour.DtAssert(v == true)
 }
 
 func Test_dtClosestPtPointTriangle(t *testing.T) {
-	closest := [3]float64{}
-	p := [3]float64{-1, 2, -1}
-	a := [3]float64{1, 2, 1}
-	b := [3]float64{3, 2, 1}
-	c := [3]float64{2, 2, 3}
+	closest := [3]float32{}
+	p := [3]float32{-1, 2, -1}
+	a := [3]float32{1, 2, 1}
+	b := [3]float32{3, 2, 1}
+	c := [3]float32{2, 2, 3}
 	detour.DtClosestPtPointTriangle(closest[:], p[:], a[:], b[:], c[:])
 	detour.DtAssert(IsEquals(closest[0], 1) && IsEquals(closest[1], 2) && IsEquals(closest[2], 1))
-	p = [3]float64{4, 2, 0}
+	p = [3]float32{4, 2, 0}
 	detour.DtClosestPtPointTriangle(closest[:], p[:], a[:], b[:], c[:])
 	detour.DtAssert(IsEquals(closest[0], 3) && IsEquals(closest[1], 2) && IsEquals(closest[2], 1))
-	p = [3]float64{3, 2, 4}
+	p = [3]float32{3, 2, 4}
 	detour.DtClosestPtPointTriangle(closest[:], p[:], a[:], b[:], c[:])
 	detour.DtAssert(IsEquals(closest[0], 2) && IsEquals(closest[1], 2) && IsEquals(closest[2], 3))
-	p = [3]float64{2, 2, 0}
+	p = [3]float32{2, 2, 0}
 	detour.DtClosestPtPointTriangle(closest[:], p[:], a[:], b[:], c[:])
 	detour.DtAssert(IsEquals(closest[0], 2) && IsEquals(closest[1], 2) && IsEquals(closest[2], 1))
-	p = [3]float64{2, 2, 2}
+	p = [3]float32{2, 2, 2}
 	detour.DtClosestPtPointTriangle(closest[:], p[:], a[:], b[:], c[:])
 	detour.DtAssert(IsEquals(closest[0], 2) && IsEquals(closest[1], 2) && IsEquals(closest[2], 2))
 }
 
 func Test_dtClosestHeightPointTriangle(t *testing.T) {
-	p := [3]float64{2, 4, 2}
-	a := [3]float64{1, 2, 1}
-	b := [3]float64{3, 2, 1}
-	c := [3]float64{2, 2, 3}
-	var h float64
+	p := [3]float32{2, 4, 2}
+	a := [3]float32{1, 2, 1}
+	b := [3]float32{3, 2, 1}
+	c := [3]float32{2, 2, 3}
+	var h float32
 	ok := detour.DtClosestHeightPointTriangle(p[:], a[:], b[:], c[:], &h)
 	detour.DtAssert(ok && IsEquals(h, 2))
 }
@@ -420,43 +420,43 @@ func Test_for(t *testing.T) {
 }
 
 func Test_dtIntersectSegmentPoly2D(t *testing.T) {
-	p0 := [3]float64{-1, 2, 1}
-	p1 := [3]float64{5, 2, 1}
-	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	p0 := [3]float32{-1, 2, 1}
+	p1 := [3]float32{5, 2, 1}
+	verts := [12]float32{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
 	nverts := len(verts) / 3
-	var tmin, tmax float64
+	var tmin, tmax float32
 	var segMin, segMax int
 	ok := detour.DtIntersectSegmentPoly2D(p0[:], p1[:], verts[:], nverts, &tmin, &tmax, &segMin, &segMax)
 	detour.DtAssert(ok && segMin == 3 && segMax == 1 && IsEquals(tmin, 2/6.0) && IsEquals(tmax, 5/6.0))
 }
 
 func Test_dtIntersectSegSeg2D(t *testing.T) {
-	ap := [3]float64{-1, 2, 1}
-	aq := [3]float64{4, 2, 1}
-	bp := [3]float64{0, 2, 0}
-	bq := [3]float64{3, 2, 3}
-	var s0, t0 float64
+	ap := [3]float32{-1, 2, 1}
+	aq := [3]float32{4, 2, 1}
+	bp := [3]float32{0, 2, 0}
+	bq := [3]float32{3, 2, 3}
+	var s0, t0 float32
 	ok := detour.DtIntersectSegSeg2D(ap[:], aq[:], bp[:], bq[:], &s0, &t0)
 	detour.DtAssert(ok && IsEquals(s0, 2/5.0) && IsEquals(t0, 1/3.0))
 }
 
 func Test_dtPointInPolygon(t *testing.T) {
-	pt := [3]float64{2, 2, 1}
-	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	pt := [3]float32{2, 2, 1}
+	verts := [12]float32{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
 	nverts := len(verts) / 3
 	ok := detour.DtPointInPolygon(pt[:], verts[:], nverts)
 	detour.DtAssert(ok)
-	pt = [3]float64{2, 2, 3}
+	pt = [3]float32{2, 2, 3}
 	ok = detour.DtPointInPolygon(pt[:], verts[:], nverts)
 	detour.DtAssert(ok == false)
 }
 
 func Test_dtDistancePtPolyEdgesSqr(t *testing.T) {
-	pt := [3]float64{2, 2, 1}
-	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	pt := [3]float32{2, 2, 1}
+	verts := [12]float32{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
 	nverts := len(verts) / 3
-	ed := make([]float64, nverts)
-	et := make([]float64, nverts)
+	ed := make([]float32, nverts)
+	et := make([]float32, nverts)
 	ok := detour.DtDistancePtPolyEdgesSqr(pt[:], verts[:], nverts, ed[:], et[:])
 	detour.DtAssert(ok &&
 		IsEquals(ed[0], 1) &&
@@ -470,8 +470,8 @@ func Test_dtDistancePtPolyEdgesSqr(t *testing.T) {
 }
 
 func Test_dtCalcPolyCenter(t *testing.T) {
-	tc := [3]float64{}
-	verts := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	tc := [3]float32{}
+	verts := [12]float32{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
 	idx := [4]uint16{0, 1, 2, 3}
 	nidx := len(idx)
 	detour.DtCalcPolyCenter(tc[:], idx[:], nidx, verts[:])
@@ -479,9 +479,9 @@ func Test_dtCalcPolyCenter(t *testing.T) {
 }
 
 func Test_dtOverlapPolyPoly2D(t *testing.T) {
-	polya := [12]float64{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
+	polya := [12]float32{1, 2, 2, 4, 2, 2, 4, 2, 0, 1, 2, 0}
 	npolya := len(polya) / 3
-	polyb := [9]float64{2, 2, 1, 2.5, 2, 3, 4, 2, 1}
+	polyb := [9]float32{2, 2, 1, 2.5, 2, 3, 4, 2, 1}
 	npolyb := len(polyb) / 3
 	ok := detour.DtOverlapPolyPoly2D(polya[:], npolya, polyb[:], npolyb)
 	detour.DtAssert(ok)
@@ -596,4 +596,32 @@ func Test_dtSwapByte(t *testing.T) {
 	var b uint8 = 2
 	detour.DtSwapByte(&a, &b)
 	detour.DtAssert(a == 2 && b == 1)
+}
+
+func Test_dtSwapEndian(t *testing.T) {
+	{
+		var v uint16 = 1
+		detour.DtSwapEndianUInt16(&v)
+		detour.DtAssert(v == 256)
+	}
+	{
+		var v int16 = 1
+		detour.DtSwapEndianInt16(&v)
+		detour.DtAssert(v == 256)
+	}
+	{
+		var v uint32 = 1
+		detour.DtSwapEndianUInt32(&v)
+		detour.DtAssert(v == 16777216)
+	}
+	{
+		var v int32 = 1
+		detour.DtSwapEndianInt32(&v)
+		detour.DtAssert(v == 16777216)
+	}
+	{
+		var v float32 = 100.9
+		detour.DtSwapEndianFloat32(&v)
+		detour.DtAssert(v == -429467712.000000)
+	}
 }
