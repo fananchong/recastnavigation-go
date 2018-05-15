@@ -33,7 +33,7 @@ type DtNode struct {
 	Id DtPolyRef ///< Polygon ref the node corresponds to.
 }
 
-/// go no support bitfields. so see GetPidx、SetPidx、GetState、SetState、GetFlags、SetFlags
+/// golang no support bitfields. so see GetPidx、SetPidx、GetState、SetState、GetFlags、SetFlags
 const DT_NODE_PARENT_MASK = (uint32(1) << DT_NODE_PARENT_BITS) - 1
 const DT_NODE_STATE_MASK = ((uint32(1) << DT_NODE_STATE_BITS) - 1) << DT_NODE_PARENT_BITS
 const DT_NODE_FLAGS_MASK = ((uint32(1) << DT_NODE_FLAGS_BITS) - 1) << (DT_NODE_PARENT_BITS + DT_NODE_STATE_BITS)
@@ -48,12 +48,12 @@ func (this *DtNode) SetPidx(pidx uint32) {
 	this.mixture &= DT_NODE_PARENT_MASK2
 	this.mixture |= pidx
 }
-func (this *DtNode) GetState() uint32 {
-	return (this.mixture & DT_NODE_STATE_MASK) >> DT_NODE_PARENT_BITS
+func (this *DtNode) GetState() uint8 {
+	return uint8((this.mixture & DT_NODE_STATE_MASK) >> DT_NODE_PARENT_BITS)
 }
-func (this *DtNode) SetState(state uint32) {
+func (this *DtNode) SetState(state uint8) {
 	this.mixture &= DT_NODE_STATE_MASK2
-	this.mixture |= (state << DT_NODE_PARENT_BITS)
+	this.mixture |= (uint32(state) << DT_NODE_PARENT_BITS)
 }
 func (this *DtNode) GetFlags() DtNodeFlags {
 	return DtNodeFlags((this.mixture & DT_NODE_FLAGS_MASK) >> (DT_NODE_PARENT_BITS + DT_NODE_STATE_BITS))
@@ -69,18 +69,19 @@ type DtNodePool struct {
 	m_nodes     []DtNode
 	m_first     []DtNodeIndex
 	m_next      []DtNodeIndex
-	m_maxNodes  int32
-	m_hashSize  int32
-	m_nodeCount int32
+	m_maxNodes  uint32
+	m_hashSize  uint32
+	m_nodeCount uint32
+
+	base uintptr
 }
 
 func (this *DtNodePool) GetNodeIdx(node *DtNode) uint32 {
 	if node == nil {
 		return 0
 	}
-	base := uintptr(unsafe.Pointer(&this.m_nodes))
 	current := uintptr(unsafe.Pointer(node))
-	return (uint32)((current-base)/unsafe.Sizeof(*node)) + 1
+	return (uint32)((current-this.base)/unsafe.Sizeof(*node)) + 1
 }
 
 func (this *DtNodePool) GetNodeAtIdx(idx uint32) *DtNode {
@@ -90,28 +91,20 @@ func (this *DtNodePool) GetNodeAtIdx(idx uint32) *DtNode {
 	return &this.m_nodes[idx-1]
 }
 
-func (this *DtNodePool) getNodeAtIdx(idx uint32) *DtNode {
-	if idx == 0 {
-		return nil
-	}
-	return &this.m_nodes[idx-1]
+func (this *DtNodePool) GetMemUsed() uint32 {
+	return uint32(unsafe.Sizeof(*this)) +
+		uint32(unsafe.Sizeof(&this.m_nodes[0]))*this.m_maxNodes +
+		uint32(unsafe.Sizeof(&this.m_next[0]))*this.m_maxNodes +
+		uint32(unsafe.Sizeof(&this.m_first[0]))*this.m_hashSize
 }
 
-func (this *DtNodePool) GetMemUsed() int32 {
-	return int32(unsafe.Sizeof(*this)) +
-		int32(unsafe.Sizeof(&this.m_nodes[0]))*this.m_maxNodes +
-		int32(unsafe.Sizeof(&this.m_next[0]))*this.m_maxNodes +
-		int32(unsafe.Sizeof(&this.m_first[0]))*this.m_hashSize
-}
-
-func (this *DtNodePool) GetMaxNodes() int32 { return this.m_maxNodes }
-
-func (this *DtNodePool) GetHashSize() int32              { return this.m_hashSize }
+func (this *DtNodePool) GetMaxNodes() uint32             { return this.m_maxNodes }
+func (this *DtNodePool) GetHashSize() uint32             { return this.m_hashSize }
 func (this *DtNodePool) GetFirst(bucket int) DtNodeIndex { return this.m_first[bucket] }
 func (this *DtNodePool) GetNext(i int) DtNodeIndex       { return this.m_next[i] }
-func (this *DtNodePool) GetNodeCount() int32             { return this.m_nodeCount }
+func (this *DtNodePool) GetNodeCount() uint32            { return this.m_nodeCount }
 
-func DtAllocNodePool(maxNodes, hashSize int32) *DtNodePool {
+func DtAllocNodePool(maxNodes, hashSize uint32) *DtNodePool {
 	pool := &DtNodePool{}
 	pool.constructor(maxNodes, hashSize)
 	return pool
