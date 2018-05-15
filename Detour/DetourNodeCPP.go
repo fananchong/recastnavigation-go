@@ -31,13 +31,13 @@ func (this *DtNodePool) constructor(maxNodes, hashSize uint32) {
 	DtAssert(this.m_first != nil)
 
 	for i := 0; i < len(this.m_first); i++ {
-		this.m_first[i] = 0xff
+		this.m_first[i] = DT_NULL_IDX
 	}
 	for i := 0; i < len(this.m_next); i++ {
-		this.m_next[i] = 0xff
+		this.m_next[i] = DT_NULL_IDX
 	}
 
-	this.base = uintptr(unsafe.Pointer(&this.m_nodes))
+	this.base = uintptr(unsafe.Pointer(&(this.m_nodes[0])))
 }
 
 func (this *DtNodePool) destructor() {
@@ -48,7 +48,7 @@ func (this *DtNodePool) destructor() {
 
 func (this *DtNodePool) Clear() {
 	for i := 0; i < len(this.m_first); i++ {
-		this.m_first[i] = 0xff
+		this.m_first[i] = DT_NULL_IDX
 	}
 	this.m_nodeCount = 0
 }

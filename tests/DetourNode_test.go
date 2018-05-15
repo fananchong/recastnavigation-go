@@ -17,4 +17,30 @@ func Test_DT_NULL_IDX(t *testing.T) {
 	node.SetState(2)
 	node.SetFlags(detour.DT_NODE_PARENT_DETACHED)
 	detour.DtAssert(node.GetPidx() == 7 && node.GetState() == 2 && node.GetFlags() == detour.DT_NODE_PARENT_DETACHED)
+
+	pool := detour.DtAllocNodePool(50, 4)
+	ns1 := make([]*detour.DtNode, 0)
+	for i := 0; i < 25; i++ {
+		ns1 = append(ns1, pool.GetNode(detour.DtPolyRef(i), 1))
+	}
+	ns2 := make([]*detour.DtNode, 0)
+	for i := 0; i < 25; i++ {
+		ns2 = append(ns2, pool.GetNode(detour.DtPolyRef(i), 2))
+	}
+	detour.DtAssert(pool.GetNode(51, 3) == nil)
+	for i := 0; i < 25; i++ {
+		detour.DtAssert(pool.GetNodeAtIdx(uint32(i+1)) == ns1[i])
+		detour.DtAssert(pool.GetNodeAtIdx(uint32(25+i+1)) == ns2[i])
+		detour.DtAssert(pool.GetNodeIdx(ns1[i]) == uint32(i+1))
+		detour.DtAssert(pool.GetNodeIdx(ns2[i]) == uint32(25+i+1))
+		detour.DtAssert(pool.FindNode(detour.DtPolyRef(i), 1) == ns1[i])
+		detour.DtAssert(pool.FindNode(detour.DtPolyRef(i), 2) == ns2[i])
+		temps := [4]*detour.DtNode{}
+		tempn := pool.FindNodes(detour.DtPolyRef(i), temps[:], 4)
+		detour.DtAssert(tempn == 2)
+		detour.DtAssert(temps[0] == ns2[i])
+		detour.DtAssert(temps[1] == ns1[i])
+	}
+	detour.DtAssert(pool.GetNodeCount() == 50)
+	detour.DtFreeNodePool(pool)
 }
