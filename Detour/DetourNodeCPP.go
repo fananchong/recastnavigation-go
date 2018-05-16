@@ -115,3 +115,39 @@ func (this *DtNodePool) GetNode(id DtPolyRef, state uint8) *DtNode {
 
 	return node
 }
+
+func (this *DtNodeQueue) constructor(n int) {
+	this.m_capacity = n
+	DtAssert(this.m_capacity > 0)
+	this.m_heap = make([]*DtNode, this.m_capacity+1)
+	DtAssert(this.m_heap != nil)
+}
+
+func (this *DtNodeQueue) destructor() {
+	this.m_heap = nil
+}
+
+func (this *DtNodeQueue) bubbleUp(i int, node *DtNode) {
+	parent := (i - 1) / 2
+	// note: (index > 0) means there is a parent
+	for (i > 0) && (this.m_heap[parent].Total > node.Total) {
+		this.m_heap[i] = this.m_heap[parent]
+		i = parent
+		parent = (i - 1) / 2
+	}
+	this.m_heap[i] = node
+}
+
+func (this *DtNodeQueue) trickleDown(i int, node *DtNode) {
+	child := (i * 2) + 1
+	for child < this.m_size {
+		if ((child + 1) < this.m_size) &&
+			(this.m_heap[child].Total > this.m_heap[child+1].Total) {
+			child++
+		}
+		this.m_heap[i] = this.m_heap[child]
+		i = child
+		child = (i * 2) + 1
+	}
+	this.bubbleUp(i, node)
+}

@@ -1,12 +1,14 @@
 package tests
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/fananchong/recastnavigation-go/Detour"
 )
 
-func Test_DT_NULL_IDX(t *testing.T) {
+func Test_dtNodePool(t *testing.T) {
 	detour.DtAssert(uint16(detour.DT_NULL_IDX) == 0xffff)
 	detour.DtAssert(detour.DT_NODE_PARENT_MASK == 0x00ffffff)
 	detour.DtAssert(detour.DT_NODE_STATE_MASK == 0x03000000)
@@ -43,4 +45,24 @@ func Test_DT_NULL_IDX(t *testing.T) {
 	}
 	detour.DtAssert(pool.GetNodeCount() == 50)
 	detour.DtFreeNodePool(pool)
+}
+
+func Test_dtNodeQueue(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	n := 32
+	queue := detour.DtAllocNodeQueue(n)
+	for i := 0; i < n; i++ {
+		node := &detour.DtNode{}
+		node.Total = float32(rand.Intn(100))
+		queue.Push(node)
+	}
+	nodes := make([]*detour.DtNode, 0)
+	for i := 0; i < n; i++ {
+		nodes = append(nodes, queue.Pop())
+	}
+	for i := 0; i < n-1; i++ {
+		for j := i + 1; j < n; j++ {
+			detour.DtAssert(nodes[i].Total <= nodes[j].Total)
+		}
+	}
 }

@@ -116,3 +116,56 @@ func DtFreeNodePool(pool *DtNodePool) {
 	}
 	pool.destructor()
 }
+
+type DtNodeQueue struct {
+	m_heap     []*DtNode
+	m_capacity int
+	m_size     int
+}
+
+func (this *DtNodeQueue) Clear() { this.m_size = 0 }
+
+func (this *DtNodeQueue) Top() *DtNode { return this.m_heap[0] }
+
+func (this *DtNodeQueue) Pop() *DtNode {
+	result := this.m_heap[0]
+	this.m_size--
+	this.trickleDown(0, this.m_heap[this.m_size])
+	return result
+}
+
+func (this *DtNodeQueue) Push(node *DtNode) {
+	this.m_size++
+	this.bubbleUp(this.m_size-1, node)
+}
+
+func (this *DtNodeQueue) Modify(node *DtNode) {
+	for i := 0; i < this.m_size; i++ {
+		if this.m_heap[i] == node {
+			this.bubbleUp(i, node)
+			return
+		}
+	}
+}
+
+func (this *DtNodeQueue) Empty() bool { return this.m_size == 0 }
+
+func (this *DtNodeQueue) GetMemUsed() uint32 {
+	return uint32(unsafe.Sizeof(*this)) +
+		uint32(unsafe.Sizeof(&this.m_heap[0]))*uint32(this.m_capacity+1)
+}
+
+func (this *DtNodeQueue) GetCapacity() int { return this.m_capacity }
+
+func DtAllocNodeQueue(n int) *DtNodeQueue {
+	queue := &DtNodeQueue{}
+	queue.constructor(n)
+	return queue
+}
+
+func DtFreeNodeQueue(queue *DtNodeQueue) {
+	if queue == nil {
+		return
+	}
+	queue.destructor()
+}
