@@ -920,3 +920,48 @@ func DtRandomPointInConvexPoly(pts []float32, npts int, areas []float32, s, t fl
 	out[1] = a*pa[1] + b*pb[1] + c*pc[1]
 	out[2] = a*pa[2] + b*pb[2] + c*pc[2]
 }
+
+///////////////////////////////////////////////////////////////////////////
+
+// This section contains detailed documentation for members that don't have
+// a source file. It reduces clutter in the main section of the header.
+
+/**
+
+@fn float dtTriArea2D(const float* a, const float* b, const float* c)
+@par
+
+The vertices are projected onto the xz-plane, so the y-values are ignored.
+
+This is a low cost function than can be used for various purposes.  Its main purpose
+is for point/line relationship testing.
+
+In all cases: A value of zero indicates that all vertices are collinear or represent the same point.
+(On the xz-plane.)
+
+When used for point/line relationship tests, AB usually represents a line against which
+the C point is to be tested.  In this case:
+
+A positive value indicates that point C is to the left of line AB, looking from A toward B.<br/>
+A negative value indicates that point C is to the right of lineAB, looking from A toward B.
+
+When used for evaluating a triangle:
+
+The absolute value of the return value is two times the area of the triangle when it is
+projected onto the xz-plane.
+
+A positive return value indicates:
+
+<ul>
+<li>The vertices are wrapped in the normal Detour wrap direction.</li>
+<li>The triangle's 3D face normal is in the general up direction.</li>
+</ul>
+
+A negative return value indicates:
+
+<ul>
+<li>The vertices are reverse wrapped. (Wrapped opposite the normal Detour wrap direction.)</li>
+<li>The triangle's 3D face normal is in the general down direction.</li>
+</ul>
+
+*/

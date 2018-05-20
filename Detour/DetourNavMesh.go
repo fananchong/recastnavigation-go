@@ -246,7 +246,7 @@ type DtMeshTile struct {
 
 	Data     []byte      ///< The tile data. (Not directly accessed under normal situations.)
 	DataSize int32       ///< Size of the tile data.
-	Flags    int32       ///< Tile flags. (See: #dtTileFlags)
+	Flags    DtTileFlags ///< Tile flags. (See: #dtTileFlags)
 	Next     *DtMeshTile ///< The next free tile, or the next tile in the spatial grid.
 }
 
@@ -258,8 +258,8 @@ type DtNavMeshParams struct {
 	Orig       [3]float32 ///< The world space origin of the navigation mesh's tile space. [(x, y, z)]
 	TileWidth  float32    ///< The width of each tile. (Along the x-axis.)
 	TileHeight float32    ///< The height of each tile. (Along the z-axis.)
-	MaxTiles   int32      ///< The maximum number of tiles the navigation mesh can contain.
-	MaxPolys   int32      ///< The maximum number of polygons each tile can contain.
+	MaxTiles   uint32     ///< The maximum number of tiles the navigation mesh can contain.
+	MaxPolys   uint32     ///< The maximum number of polygons each tile can contain.
 }
 
 /// A navigation mesh based on tiles of convex polygons.
@@ -268,9 +268,9 @@ type DtNavMesh struct {
 	m_params                  DtNavMeshParams ///< Current initialization params. TODO: do not store this info twice.
 	m_orig                    [3]float32      ///< Origin of the tile (0,0)
 	m_tileWidth, m_tileHeight float32         ///< Dimensions of each tile.
-	m_maxTiles                int32           ///< Max number of tiles.
-	m_tileLutSize             int32           ///< Tile hash lookup size (must be pot).
-	m_tileLutMask             int32           ///< Tile hash lookup mask.
+	m_maxTiles                uint32          ///< Max number of tiles.
+	m_tileLutSize             uint32          ///< Tile hash lookup size (must be pot).
+	m_tileLutMask             uint32          ///< Tile hash lookup mask.
 
 	m_posLookup []*DtMeshTile ///< Tile hash lookup.
 	m_nextFree  *DtMeshTile   ///< Freelist of tiles.
@@ -280,6 +280,64 @@ type DtNavMesh struct {
 	m_tileBits uint32 ///< Number of tile bits in the tile ID.
 	m_polyBits uint32 ///< Number of poly bits in the tile ID.
 }
+
+/// @{
+/// @name Encoding and Decoding
+/// These functions are generally meant for internal use only.
+
+/// Derives a standard polygon reference.
+///  @note This function is generally meant for internal use only.
+///  @param[in]	salt	The tile's salt value.
+///  @param[in]	it		The index of the tile.
+///  @param[in]	ip		The index of the polygon within the tile.
+func (this *DtNavMesh) EncodePolyId(salt, it, ip uint32) DtPolyRef {
+	return DtPolyRef((salt << (this.m_polyBits + this.m_tileBits)) | (it << this.m_polyBits) | ip)
+}
+
+/// Decodes a standard polygon reference.
+///  @note This function is generally meant for internal use only.
+///  @param[in]	ref   The polygon reference to decode.
+///  @param[out]	salt	The tile's salt value.
+///  @param[out]	it		The index of the tile.
+///  @param[out]	ip		The index of the polygon within the tile.
+///  @see #encodePolyId
+func (this *DtNavMesh) DecodePolyId(ref DtPolyRef, salt, it, ip *uint32) {
+	saltMask := (uint32(1) << this.m_saltBits) - 1
+	tileMask := (uint32(1) << this.m_tileBits) - 1
+	polyMask := (uint32(1) << this.m_polyBits) - 1
+	*salt = ((uint32(ref) >> (this.m_polyBits + this.m_tileBits)) & saltMask)
+	*it = ((uint32(ref) >> this.m_polyBits) & tileMask)
+	*ip = (uint32(ref) & polyMask)
+}
+
+/// Extracts a tile's salt value from the specified polygon reference.
+///  @note This function is generally meant for internal use only.
+///  @param[in]	ref		The polygon reference.
+///  @see #encodePolyId
+func (this *DtNavMesh) DecodePolyIdSalt(ref DtPolyRef) uint32 {
+	saltMask := (uint32(1) << this.m_saltBits) - 1
+	return ((uint32(ref) >> (this.m_polyBits + this.m_tileBits)) & saltMask)
+}
+
+/// Extracts the tile's index from the specified polygon reference.
+///  @note This function is generally meant for internal use only.
+///  @param[in]	ref		The polygon reference.
+///  @see #encodePolyId
+func (this *DtNavMesh) DecodePolyIdTile(ref DtPolyRef) uint32 {
+	tileMask := (uint32(1) << this.m_tileBits) - 1
+	return ((uint32(ref) >> this.m_polyBits) & tileMask)
+}
+
+/// Extracts the polygon's index (within its tile) from the specified polygon reference.
+///  @note This function is generally meant for internal use only.
+///  @param[in]	ref		The polygon reference.
+///  @see #encodePolyId
+func (this *DtNavMesh) DecodePolyIdPoly(ref DtPolyRef) uint32 {
+	polyMask := (uint32(1) << this.m_polyBits) - 1
+	return (uint32(ref) & polyMask)
+}
+
+/// @}
 
 /// Allocates a navigation mesh object using the Detour allocator.
 /// @return A navigation mesh that is ready for initialization, or null on failure.
@@ -299,3 +357,98 @@ func DtFreeNavMesh(navmesh *DtNavMesh) {
 	}
 	navmesh.destructor()
 }
+
+///////////////////////////////////////////////////////////////////////////
+
+// This section contains detailed documentation for members that don't have
+// a source file. It reduces clutter in the main section of the header.
+
+/**
+
+@typedef dtPolyRef
+@par
+
+Polygon references are subject to the same invalidate/preserve/restore
+rules that apply to #dtTileRef's.  If the #dtTileRef for the polygon's
+tile changes, the polygon reference becomes invalid.
+
+Changing a polygon's flags, area id, etc. does not impact its polygon
+reference.
+
+@typedef dtTileRef
+@par
+
+The following changes will invalidate a tile reference:
+
+- The referenced tile has been removed from the navigation mesh.
+- The navigation mesh has been initialized using a different set
+  of #dtNavMeshParams.
+
+A tile reference is preserved/restored if the tile is added to a navigation
+mesh initialized with the original #dtNavMeshParams and is added at the
+original reference location. (E.g. The lastRef parameter is used with
+dtNavMesh::addTile.)
+
+Basically, if the storage structure of a tile changes, its associated
+tile reference changes.
+
+
+@var unsigned short dtPoly::neis[DT_VERTS_PER_POLYGON]
+@par
+
+Each entry represents data for the edge starting at the vertex of the same index.
+E.g. The entry at index n represents the edge data for vertex[n] to vertex[n+1].
+
+A value of zero indicates the edge has no polygon connection. (It makes up the
+border of the navigation mesh.)
+
+The information can be extracted as follows:
+@code
+neighborRef = neis[n] & 0xff; // Get the neighbor polygon reference.
+
+if (neis[n] & #DT_EX_LINK)
+{
+    // The edge is an external (portal) edge.
+}
+@endcode
+
+@var float dtMeshHeader::bvQuantFactor
+@par
+
+This value is used for converting between world and bounding volume coordinates.
+For example:
+@code
+const float cs = 1.0f / tile->header->bvQuantFactor;
+const dtBVNode* n = &tile->bvTree[i];
+if (n->i >= 0)
+{
+    // This is a leaf node.
+    float worldMinX = tile->header->bmin[0] + n->bmin[0]*cs;
+    float worldMinY = tile->header->bmin[0] + n->bmin[1]*cs;
+    // Etc...
+}
+@endcode
+
+@struct dtMeshTile
+@par
+
+Tiles generally only exist within the context of a dtNavMesh object.
+
+Some tile content is optional.  For example, a tile may not contain any
+off-mesh connections.  In this case the associated pointer will be null.
+
+If a detail mesh exists it will share vertices with the base polygon mesh.
+Only the vertices unique to the detail mesh will be stored in #detailVerts.
+
+@warning Tiles returned by a dtNavMesh object are not guarenteed to be populated.
+For example: The tile at a location might not have been loaded yet, or may have been removed.
+In this case, pointers will be null.  So if in doubt, check the polygon count in the
+tile's header to determine if a tile has polygons defined.
+
+@var float dtOffMeshConnection::pos[6]
+@par
+
+For a properly built navigation mesh, vertex A will always be within the bounds of the mesh.
+Vertex B is not required to be within the bounds of the mesh.
+
+*/
