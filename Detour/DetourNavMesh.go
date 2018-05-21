@@ -160,9 +160,9 @@ type DtLink struct {
 /// @note This structure is rarely if ever used by the end user.
 /// @see dtMeshTile
 type DtBVNode struct {
-	Bmin [3]uint8 ///< Minimum bounds of the node's AABB. [(x, y, z)]
-	Bmax [3]uint8 ///< Maximum bounds of the node's AABB. [(x, y, z)]
-	I    int32    ///< The node's index. (Negative for escape sequence.)
+	Bmin [3]uint16 ///< Minimum bounds of the node's AABB. [(x, y, z)]
+	Bmax [3]uint16 ///< Maximum bounds of the node's AABB. [(x, y, z)]
+	I    int32     ///< The node's index. (Negative for escape sequence.)
 }
 
 /// Defines an navigation mesh off-mesh connection within a dtMeshTile object.
@@ -268,9 +268,9 @@ type DtNavMesh struct {
 	m_params                  DtNavMeshParams ///< Current initialization params. TODO: do not store this info twice.
 	m_orig                    [3]float32      ///< Origin of the tile (0,0)
 	m_tileWidth, m_tileHeight float32         ///< Dimensions of each tile.
-	m_maxTiles                uint32          ///< Max number of tiles.
-	m_tileLutSize             uint32          ///< Tile hash lookup size (must be pot).
-	m_tileLutMask             uint32          ///< Tile hash lookup mask.
+	m_maxTiles                int32           ///< Max number of tiles.
+	m_tileLutSize             int32           ///< Tile hash lookup size (must be pot).
+	m_tileLutMask             int32           ///< Tile hash lookup mask.
 
 	m_posLookup []*DtMeshTile ///< Tile hash lookup.
 	m_nextFree  *DtMeshTile   ///< Freelist of tiles.

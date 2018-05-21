@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io/ioutil"
 	"testing"
+	"unsafe"
 
 	"github.com/fananchong/recastnavigation-go/Detour"
 )
@@ -122,4 +123,68 @@ func Test_dtMeshHeader(t *testing.T) {
 	detour.DtAssert(IsEquals(header.Bmax[1], 3.6))
 	detour.DtAssert(IsEquals(header.Bmax[2], 4.6))
 	detour.DtAssert(IsEquals(header.BvQuantFactor, 998))
+}
+
+func Test_size(t *testing.T) {
+
+	/*
+	   const int headerSize = dtAlign4(sizeof(dtMeshHeader));
+	   const int vertsSize = dtAlign4(sizeof(float));
+	   const int polysSize = dtAlign4(sizeof(dtPoly));
+	   const int linksSize = dtAlign4(sizeof(dtLink));
+	   const int detailMeshesSize = dtAlign4(sizeof(dtPolyDetail));
+	   const int detailVertsSize = dtAlign4(sizeof(float));
+	   const int detailTrisSize = dtAlign4(sizeof(unsigned char));
+	   const int bvtreeSize = dtAlign4(sizeof(dtBVNode));
+	   const int offMeshLinksSize = dtAlign4(sizeof(dtOffMeshConnection));
+
+	   printf("headerSize: %d\n", headerSize);
+	   printf("vertsSize: %d\n", vertsSize);
+	   printf("polysSize: %d\n", polysSize);
+	   printf("linksSize: %d\n", linksSize);
+	   printf("detailMeshesSize: %d\n", detailMeshesSize);
+	   printf("detailVertsSize: %d\n", detailVertsSize);
+	   printf("detailTrisSize: %d\n", detailTrisSize);
+	   printf("bvtreeSize: %d\n", bvtreeSize);
+	   printf("offMeshLinksSize: %d\n", offMeshLinksSize);
+	*/
+
+	/*
+	   headerSize: 100
+	   vertsSize: 4
+	   polysSize: 32
+	   linksSize: 12
+	   detailMeshesSize: 12
+	   detailVertsSize: 4
+	   detailTrisSize: 4
+	   bvtreeSize: 16
+	   offMeshLinksSize: 36
+	*/
+
+	headerSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtMeshHeader{})))
+	detour.DtAssert(headerSize == 100)
+
+	vertsSize := detour.DtAlign4(int(unsafe.Sizeof(float32(1.2))))
+	detour.DtAssert(vertsSize == 4)
+
+	polysSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtPoly{})))
+	detour.DtAssert(polysSize == 32)
+
+	linksSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtLink{})))
+	detour.DtAssert(linksSize == 12)
+
+	detailMeshesSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtPolyDetail{})))
+	detour.DtAssert(detailMeshesSize == 12)
+
+	detailVertsSize := detour.DtAlign4(int(unsafe.Sizeof(float32(1.2))))
+	detour.DtAssert(detailVertsSize == 4)
+
+	detailTrisSize := detour.DtAlign4(int(unsafe.Sizeof(uint8(1))))
+	detour.DtAssert(detailTrisSize == 4)
+
+	bvtreeSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtBVNode{})))
+	detour.DtAssert(bvtreeSize == 16)
+
+	offMeshLinksSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtOffMeshConnection{})))
+	detour.DtAssert(offMeshLinksSize == 36)
 }
