@@ -827,6 +827,14 @@ func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags, las
 
 	// Patch header pointers.
 	headerSize := DtAlign4(int(unsafe.Sizeof(DtMeshHeader{})))
+	vertsSize := DtAlign4(int(unsafe.Sizeof(float32(1.0))) * 3 * int(header.VertCount))
+	polysSize := DtAlign4(int(unsafe.Sizeof(DtPoly{})) * int(header.PolyCount))
+	linksSize := DtAlign4(int(unsafe.Sizeof(DtLink{})) * int(header.MaxLinkCount))
+	detailMeshesSize := DtAlign4(int(unsafe.Sizeof(DtPolyDetail{})) * int(header.DetailMeshCount))
+	detailVertsSize := DtAlign4(int(unsafe.Sizeof(float32(1.0))) * 3 * int(header.DetailVertCount))
+	detailTrisSize := DtAlign4(int(unsafe.Sizeof(uint8(1))) * 4 * int(header.DetailTriCount))
+	bvtreeSize := DtAlign4(int(unsafe.Sizeof(DtBVNode{})) * int(header.BvNodeCount))
+	offMeshLinksSize := DtAlign4(int(unsafe.Sizeof(DtOffMeshConnection{})) * int(header.OffMeshConCount))
 
 	d := 0 + headerSize
 
@@ -834,49 +842,59 @@ func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags, las
 	sliceHeader.Cap = 3 * int(header.VertCount)
 	sliceHeader.Len = 3 * int(header.VertCount)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(float32(1.0))) * 3 * int(header.VertCount)
+	d += vertsSize
 
 	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.Polys))))
 	sliceHeader.Cap = int(header.PolyCount)
 	sliceHeader.Len = int(header.PolyCount)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(DtPoly{})) * int(header.PolyCount)
+	d += polysSize
 
 	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.Links))))
 	sliceHeader.Cap = int(header.MaxLinkCount)
 	sliceHeader.Len = int(header.MaxLinkCount)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(DtLink{})) * int(header.MaxLinkCount)
+	d += linksSize
 
-	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.DetailMeshes))))
-	sliceHeader.Cap = int(header.DetailMeshCount)
-	sliceHeader.Len = int(header.DetailMeshCount)
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(DtPolyDetail{})) * int(header.DetailMeshCount)
+	if header.DetailMeshCount != 0 {
+		sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.DetailMeshes))))
+		sliceHeader.Cap = int(header.DetailMeshCount)
+		sliceHeader.Len = int(header.DetailMeshCount)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
+		d += detailMeshesSize
+	}
 
-	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.DetailVerts))))
-	sliceHeader.Cap = 3 * int(header.DetailVertCount)
-	sliceHeader.Len = 3 * int(header.DetailVertCount)
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(float32(1.0))) * 3 * int(header.DetailVertCount)
+	if header.DetailVertCount != 0 {
+		sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.DetailVerts))))
+		sliceHeader.Cap = 3 * int(header.DetailVertCount)
+		sliceHeader.Len = 3 * int(header.DetailVertCount)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
+		d += detailVertsSize
+	}
 
-	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.DetailTris))))
-	sliceHeader.Cap = 4 * int(header.DetailTriCount)
-	sliceHeader.Len = 4 * int(header.DetailTriCount)
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(uint8(1))) * 4 * int(header.DetailTriCount)
+	if header.DetailTriCount != 0 {
+		sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.DetailTris))))
+		sliceHeader.Cap = 4 * int(header.DetailTriCount)
+		sliceHeader.Len = 4 * int(header.DetailTriCount)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
+		d += detailTrisSize
+	}
 
-	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.BvTree))))
-	sliceHeader.Cap = int(header.BvNodeCount)
-	sliceHeader.Len = int(header.BvNodeCount)
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(DtBVNode{})) * int(header.BvNodeCount)
+	if header.BvNodeCount != 0 {
+		sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.BvTree))))
+		sliceHeader.Cap = int(header.BvNodeCount)
+		sliceHeader.Len = int(header.BvNodeCount)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
+		d += bvtreeSize
+	}
 
-	sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.OffMeshCons))))
-	sliceHeader.Cap = int(header.OffMeshConCount)
-	sliceHeader.Len = int(header.OffMeshConCount)
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
-	d += int(unsafe.Sizeof(DtOffMeshConnection{})) * int(header.OffMeshConCount)
+	if header.OffMeshConCount != 0 {
+		sliceHeader = (*reflect.SliceHeader)((unsafe.Pointer(&(tile.OffMeshCons))))
+		sliceHeader.Cap = int(header.OffMeshConCount)
+		sliceHeader.Len = int(header.OffMeshConCount)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&(data[d])))
+		d += offMeshLinksSize
+	}
 
 	// If there are no items in the bvtree, reset the tree pointer.
 	if header.BvNodeCount == 0 {

@@ -52,12 +52,51 @@ func Test_dtNavMesh1(t *testing.T) {
 	detour.DtAssert(ip1 == ip2)
 }
 
+type NavMeshSetHeader struct {
+	magic      int32
+	version    int32
+	numTiles   int32
+	params     detour.DtNavMeshParams
+	boundsMinX float32
+	boundsMinY float32
+	boundsMinZ float32
+	boundsMaxX float32
+	boundsMaxY float32
+	boundsMaxZ float32
+}
+
+const NAVMESHSET_MAGIC int32 = int32('M')<<24 | int32('S')<<16 | int32('E')<<8 | int32('T')
+const NAVMESHSET_VERSION int32 = 1
+
+type NavMeshTileHeader struct {
+	tileRef  detour.DtTileRef
+	dataSize int32
+}
+
 func Test_dtNavMesh2(t *testing.T) {
-	//	data, err := ioutil.ReadFile("./data.dtMeshHeader")
-	//	detour.DtAssert(err == nil)
-	//	navMesh := detour.DtAllocNavMesh()
-	//	state := navMesh.Init2(data, len(data), 0)
-	//	detour.DtAssert(detour.DtStatusSucceed(state))
+	meshData, err := ioutil.ReadFile("./nav_test.obj.tile.bin")
+	detour.DtAssert(err == nil)
+
+	header := (*NavMeshSetHeader)(unsafe.Pointer(&(meshData[0])))
+	detour.DtAssert(header.magic == NAVMESHSET_MAGIC)
+	detour.DtAssert(header.version == NAVMESHSET_VERSION)
+
+	navMesh := detour.DtAllocNavMesh()
+	state := navMesh.Init(&header.params)
+	detour.DtAssert(detour.DtStatusSucceed(state))
+
+	d := int32(unsafe.Sizeof(*header))
+	for i := 0; i < int(header.numTiles); i++ {
+		tileHeader := (*NavMeshTileHeader)(unsafe.Pointer(&(meshData[d])))
+		if tileHeader.tileRef == 0 || tileHeader.dataSize == 0 {
+			break
+		}
+		d += int32(unsafe.Sizeof(*tileHeader))
+
+		data := meshData[d : d+tileHeader.dataSize]
+		navMesh.AddTile(data, int(tileHeader.dataSize), detour.DT_TILE_FREE_DATA, tileHeader.tileRef, nil)
+		d += tileHeader.dataSize
+	}
 }
 
 func Test_dtMeshHeader(t *testing.T) {
