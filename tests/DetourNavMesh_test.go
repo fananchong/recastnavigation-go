@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io/ioutil"
+	"reflect"
 	"testing"
 	"unsafe"
 
@@ -187,4 +188,102 @@ func Test_size(t *testing.T) {
 
 	offMeshLinksSize := detour.DtAlign4(int(unsafe.Sizeof(detour.DtOffMeshConnection{})))
 	detour.DtAssert(offMeshLinksSize == 36)
+}
+
+func Test_data(t *testing.T) {
+	a := detour.DtPoly{}
+	b := detour.DtPoly{}
+	a.FirstLink = 100000
+	a.Verts[0] = 200
+	a.Verts[1] = 300
+	a.Verts[2] = 400
+	a.Verts[3] = 500
+	a.Verts[4] = 600
+	a.Verts[5] = 700
+	a.Neis[0] = 8000
+	a.Neis[1] = 9000
+	a.Neis[2] = 10000
+	a.Neis[3] = 11000
+	a.Neis[4] = 12000
+	a.Neis[5] = 13000
+	a.Flags = 14000
+	a.VertCount = 200
+	a.AreaAndtype = 100
+	b.FirstLink = 100001
+	b.Verts[0] = 201
+	b.Verts[1] = 301
+	b.Verts[2] = 401
+	b.Verts[3] = 501
+	b.Verts[4] = 601
+	b.Verts[5] = 701
+	b.Neis[0] = 8001
+	b.Neis[1] = 9001
+	b.Neis[2] = 10001
+	b.Neis[3] = 11001
+	b.Neis[4] = 12001
+	b.Neis[5] = 13001
+	b.Flags = 14001
+	b.VertCount = 201
+	b.AreaAndtype = 101
+
+	detour.DtAssert(detour.DtAlign4(int(unsafe.Sizeof(a))) == 32)
+	detour.DtAssert(detour.DtAlign4(int(unsafe.Sizeof(b))) == 32)
+
+	var data []byte
+	for i := 0; i < detour.DtAlign4(int(unsafe.Sizeof(a))); i++ {
+		data = append(data, *(*uint8)(unsafe.Pointer((uintptr(unsafe.Pointer(&a)) + uintptr(i)))))
+	}
+	for i := 0; i < detour.DtAlign4(int(unsafe.Sizeof(b))); i++ {
+		data = append(data, *(*uint8)(unsafe.Pointer((uintptr(unsafe.Pointer(&b)) + uintptr(i)))))
+	}
+
+	s := int(unsafe.Sizeof(a))
+	d := 0
+	a2 := (*detour.DtPoly)(unsafe.Pointer(&(data[d])))
+	d += s
+	b2 := (*detour.DtPoly)(unsafe.Pointer(&(data[d])))
+
+	detour.DtAssert(a2.FirstLink == 100000)
+	detour.DtAssert(a2.Verts[0] == 200)
+	detour.DtAssert(a2.Verts[1] == 300)
+	detour.DtAssert(a2.Verts[2] == 400)
+	detour.DtAssert(a2.Verts[3] == 500)
+	detour.DtAssert(a2.Verts[4] == 600)
+	detour.DtAssert(a2.Verts[5] == 700)
+	detour.DtAssert(a2.Neis[0] == 8000)
+	detour.DtAssert(a2.Neis[1] == 9000)
+	detour.DtAssert(a2.Neis[2] == 10000)
+	detour.DtAssert(a2.Neis[3] == 11000)
+	detour.DtAssert(a2.Neis[4] == 12000)
+	detour.DtAssert(a2.Neis[5] == 13000)
+	detour.DtAssert(a2.Flags == 14000)
+	detour.DtAssert(a2.VertCount == 200)
+	detour.DtAssert(a2.AreaAndtype == 100)
+
+	detour.DtAssert(b2.FirstLink == 100001)
+	detour.DtAssert(b2.Verts[0] == 201)
+	detour.DtAssert(b2.Verts[1] == 301)
+	detour.DtAssert(b2.Verts[2] == 401)
+	detour.DtAssert(b2.Verts[3] == 501)
+	detour.DtAssert(b2.Verts[4] == 601)
+	detour.DtAssert(b2.Verts[5] == 701)
+	detour.DtAssert(b2.Neis[0] == 8001)
+	detour.DtAssert(b2.Neis[1] == 9001)
+	detour.DtAssert(b2.Neis[2] == 10001)
+	detour.DtAssert(b2.Neis[3] == 11001)
+	detour.DtAssert(b2.Neis[4] == 12001)
+	detour.DtAssert(b2.Neis[5] == 13001)
+	detour.DtAssert(b2.Flags == 14001)
+	detour.DtAssert(b2.VertCount == 201)
+	detour.DtAssert(b2.AreaAndtype == 101)
+
+	var cc []detour.DtPoly
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&cc)))
+	sliceHeader.Cap = 2
+	sliceHeader.Len = 2
+	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[0])))
+	detour.DtAssert(cc[0].FirstLink == 100000)
+	detour.DtAssert(cc[0].Verts[0] == 200)
+	detour.DtAssert(cc[1].FirstLink == 100001)
+	detour.DtAssert(cc[1].Verts[0] == 201)
 }

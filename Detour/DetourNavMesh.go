@@ -128,13 +128,15 @@ type DtPoly struct {
 func (this *DtPoly) SetArea(a uint8) { this.AreaAndtype = (this.AreaAndtype & 0xc0) | (a & 0x3f) }
 
 /// Sets the polygon type. (See: #dtPolyTypes.)
-func (this *DtPoly) SetType(t uint8) { this.AreaAndtype = (this.AreaAndtype & 0x3f) | (t << 6) }
+func (this *DtPoly) SetType(t DtPolyTypes) {
+	this.AreaAndtype = (this.AreaAndtype & 0x3f) | (uint8(t) << 6)
+}
 
 /// Gets the user defined area id.
 func (this *DtPoly) GetArea() uint8 { return this.AreaAndtype & 0x3f }
 
 /// Gets the polygon type. (See: #dtPolyTypes)
-func (this *DtPoly) GetType() uint8 { return this.AreaAndtype >> 6 }
+func (this *DtPoly) GetType() DtPolyTypes { return DtPolyTypes(this.AreaAndtype >> 6) }
 
 /// Defines the location of detail sub-mesh data within a dtMeshTile.
 type DtPolyDetail struct {
