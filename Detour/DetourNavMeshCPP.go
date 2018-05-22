@@ -8,6 +8,76 @@ import (
 	"unsafe"
 )
 
+func overlapSlabs(amin, amax, bmin, bmax []float32, px, py float32) bool {
+	// Check for horizontal overlap.
+	// The segment is shrunken a little so that slabs which touch
+	// at end points are not connected.
+	minx := DtMaxFloat32(amin[0]+px, bmin[0]+px)
+	maxx := DtMinFloat32(amax[0]-px, bmax[0]-px)
+	if minx > maxx {
+		return false
+	}
+	// Check vertical overlap.
+	ad := (amax[1] - amin[1]) / (amax[0] - amin[0])
+	ak := amin[1] - ad*amin[0]
+	bd := (bmax[1] - bmin[1]) / (bmax[0] - bmin[0])
+	bk := bmin[1] - bd*bmin[0]
+	aminy := ad*minx + ak
+	amaxy := ad*maxx + ak
+	bminy := bd*minx + bk
+	bmaxy := bd*maxx + bk
+	dmin := bminy - aminy
+	dmax := bmaxy - amaxy
+
+	// Crossing segments always overlap.
+	if dmin*dmax < 0 {
+		return true
+	}
+	// Check for overlap at endpoints.
+	thr := DtSqrFloat32(py * 2)
+	if dmin*dmin <= thr || dmax*dmax <= thr {
+		return true
+	}
+	return false
+}
+
+func getSlabCoord(va []float32, side int) float32 {
+	if side == 0 || side == 4 {
+		return va[0]
+	} else if side == 2 || side == 6 {
+		return va[2]
+	}
+	return 0
+}
+
+func calcSlabEndPoints(va, vb, bmin, bmax []float32, side int) {
+	if side == 0 || side == 4 {
+		if va[2] < vb[2] {
+			bmin[0] = va[2]
+			bmin[1] = va[1]
+			bmax[0] = vb[2]
+			bmax[1] = vb[1]
+		} else {
+			bmin[0] = vb[2]
+			bmin[1] = vb[1]
+			bmax[0] = va[2]
+			bmax[1] = va[1]
+		}
+	} else if side == 2 || side == 6 {
+		if va[0] < vb[0] {
+			bmin[0] = va[0]
+			bmin[1] = va[1]
+			bmax[0] = vb[0]
+			bmax[1] = vb[1]
+		} else {
+			bmin[0] = vb[0]
+			bmin[1] = vb[1]
+			bmax[0] = va[0]
+			bmax[1] = va[1]
+		}
+	}
+}
+
 func computeTileHash(x, y, mask int32) int32 {
 	h1 := uint32(0x8da6b343) // Large multiplicative constants;
 	h2 := uint32(0xd8163841) // here arbitrarily chosen primes
@@ -152,6 +222,215 @@ func (this *DtNavMesh) Init2(data []byte, dataSize int, flags DtTileFlags) DtSta
 		return status
 	}
 	return this.AddTile(data, dataSize, flags, 0, nil)
+}
+
+/// The navigation mesh initialization params.
+func (this *DtNavMesh) GetParams() *DtNavMeshParams {
+	/// @par
+	///
+	/// @note The parameters are created automatically when the single tile
+	/// initialization is performed.
+	return &this.m_params
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+/// Returns all polygons in neighbour tile based on portal defined by the segment.
+func (this *DtNavMesh) findConnectingPolys(va, vb []float32, tile *DtMeshTile, side int, con []DtPolyRef, conarea []float32, maxcon int) int {
+	if tile == nil {
+		return 0
+	}
+
+	var amin, amax [2]float32
+	calcSlabEndPoints(va, vb, amin[:], amax[:], side)
+	apos := getSlabCoord(va, side)
+
+	// Remove links pointing to 'side' and compact the links array.
+	var bmin, bmax [2]float32
+	m := DT_EXT_LINK | (uint16)(side)
+	n := 0
+
+	base := this.GetPolyRefBase(tile)
+
+	for i := 0; i < int(tile.Header.PolyCount); i++ {
+		poly := &tile.Polys[i]
+		nv := int(poly.VertCount)
+		for j := 0; j < nv; j++ {
+			// Skip edges which do not point to the right side.
+			if poly.Neis[j] != m {
+				continue
+			}
+
+			vc := tile.Verts[poly.Verts[j]*3:]
+			vd := tile.Verts[poly.Verts[(j+1)%nv]*3:]
+			bpos := getSlabCoord(vc, side)
+
+			// Segments are not close enough.
+			if DtAbsFloat32(apos-bpos) > 0.01 {
+				continue
+			}
+			// Check if the segments touch.
+			calcSlabEndPoints(vc, vd, bmin[:], bmax[:], side)
+
+			if !overlapSlabs(amin[:], amax[:], bmin[:], bmax[:], 0.01, tile.Header.WalkableClimb) {
+				continue
+			}
+
+			// Add return value.
+			if n < maxcon {
+				conarea[n*2+0] = DtMaxFloat32(amin[0], bmin[0])
+				conarea[n*2+1] = DtMinFloat32(amax[0], bmax[0])
+				con[n] = base | (DtPolyRef)(i)
+				n++
+			}
+			break
+		}
+	}
+	return n
+}
+
+/// Builds external polygon links for a tile.
+func (this *DtNavMesh) connectExtLinks(tile, target *DtMeshTile, side int) {
+	if tile == nil {
+		return
+	}
+
+	// Connect border links.
+	for i := 0; i < int(tile.Header.PolyCount); i++ {
+		poly := &tile.Polys[i]
+
+		// Create new links.
+		//		unsigned short m = DT_EXT_LINK | (unsigned short)side;
+
+		nv := int(poly.VertCount)
+		for j := 0; j < nv; j++ {
+			// Skip non-portal edges.
+			if (poly.Neis[j] & DT_EXT_LINK) == 0 {
+				continue
+			}
+			dir := (int)(poly.Neis[j] & 0xff)
+			if side != -1 && dir != side {
+				continue
+			}
+			// Create new links
+			va := tile.Verts[poly.Verts[j]*3:]
+			vb := tile.Verts[poly.Verts[(j+1)%nv]*3:]
+			var nei [4]DtPolyRef
+			var neia [4 * 2]float32
+			nnei := this.findConnectingPolys(va, vb, target, DtOppositeTile(dir), nei[:], neia[:], 4)
+			for k := 0; k < nnei; k++ {
+				idx := allocLink(tile)
+				if idx != DT_NULL_LINK {
+					link := &tile.Links[idx]
+					link.Ref = nei[k]
+					link.Edge = (uint8)(j)
+					link.Side = (uint8)(dir)
+
+					link.Next = poly.FirstLink
+					poly.FirstLink = idx
+
+					// Compress portal limits to a byte value.
+					if dir == 0 || dir == 4 {
+						tmin := (neia[k*2+0] - va[2]) / (vb[2] - va[2])
+						tmax := (neia[k*2+1] - va[2]) / (vb[2] - va[2])
+						if tmin > tmax {
+							DtSwapFloat32(&tmin, &tmax)
+						}
+						link.Bmin = (uint8)(DtClampFloat32(tmin, 0.0, 1.0) * 255.0)
+						link.Bmax = (uint8)(DtClampFloat32(tmax, 0.0, 1.0) * 255.0)
+					} else if dir == 2 || dir == 6 {
+						tmin := (neia[k*2+0] - va[0]) / (vb[0] - va[0])
+						tmax := (neia[k*2+1] - va[0]) / (vb[0] - va[0])
+						if tmin > tmax {
+							DtSwapFloat32(&tmin, &tmax)
+						}
+						link.Bmin = (uint8)(DtClampFloat32(tmin, 0.0, 1.0) * 255.0)
+						link.Bmax = (uint8)(DtClampFloat32(tmax, 0.0, 1.0) * 255.0)
+					}
+				}
+			}
+		}
+	}
+}
+
+/// Builds external polygon links for a tile.
+func (this *DtNavMesh) connectExtOffMeshLinks(tile, target *DtMeshTile, side int) {
+	if tile == nil {
+		return
+	}
+
+	// Connect off-mesh links.
+	// We are interested on links which land from target tile to this tile.
+	var oppositeSide uint16
+	if side == -1 {
+		oppositeSide = 0xff
+	} else {
+		oppositeSide = uint16(DtOppositeTile(side))
+	}
+
+	for i := 0; i < int(target.Header.OffMeshConCount); i++ {
+		targetCon := &target.OffMeshCons[i]
+		if uint16(targetCon.Side) != oppositeSide {
+			continue
+		}
+		targetPoly := &target.Polys[targetCon.Poly]
+		// Skip off-mesh connections which start location could not be connected at all.
+		if targetPoly.FirstLink == DT_NULL_LINK {
+			continue
+		}
+		halfExtents := [3]float32{targetCon.Rad, target.Header.WalkableClimb, targetCon.Rad}
+
+		// Find polygon to connect to.
+		p := targetCon.Pos[3:]
+		var nearestPt [3]float32
+		ref := this.findNearestPolyInTile(tile, p, halfExtents[:], nearestPt[:])
+		if ref == 0 {
+			continue
+		}
+		// findNearestPoly may return too optimistic results, further check to make sure.
+		if DtSqrFloat32(nearestPt[0]-p[0])+DtSqrFloat32(nearestPt[2]-p[2]) > DtSqrFloat32(targetCon.Rad) {
+			continue
+		}
+		// Make sure the location is on current mesh.
+		v := target.Verts[targetPoly.Verts[1]*3:]
+		DtVcopy(v, nearestPt[:])
+
+		// Link off-mesh connection to target poly.
+		idx := allocLink(target)
+		if idx != DT_NULL_LINK {
+			link := &target.Links[idx]
+			link.Ref = ref
+			link.Edge = 1
+			link.Side = uint8(oppositeSide)
+			link.Bmin = 0
+			link.Bmax = 0
+			// Add to linked list.
+			link.Next = targetPoly.FirstLink
+			targetPoly.FirstLink = idx
+		}
+
+		// Link target poly to off-mesh connection.
+		if (targetCon.Flags & DT_OFFMESH_CON_BIDIR) != 0 {
+			tidx := allocLink(tile)
+			if tidx != DT_NULL_LINK {
+				landPolyIdx := (uint16)(this.DecodePolyIdPoly(ref))
+				landPoly := &tile.Polys[landPolyIdx]
+				link := &tile.Links[tidx]
+				link.Ref = this.GetPolyRefBase(target) | (DtPolyRef)(targetCon.Poly)
+				link.Edge = 0xff
+				if side == -1 {
+					link.Side = 0xff
+				} else {
+					link.Side = uint8(side)
+				}
+				link.Bmin = 0
+				link.Bmax = 0
+				// Add to linked list.
+				link.Next = landPoly.FirstLink
+				landPoly.FirstLink = tidx
+			}
+		}
+	}
 }
 
 /// Builds internal polygons links for a tile.
@@ -621,42 +900,39 @@ func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags, las
 
 	// Base off-mesh connections to their starting polygons and connect connections inside the tile.
 	this.baseOffMeshLinks(tile)
-	//		connectExtOffMeshLinks(tile, tile, -1);
+	this.connectExtOffMeshLinks(tile, tile, -1)
 
-	//		// Create connections with neighbour tiles.
-	//		static const int MAX_NEIS = 32;
-	//		dtMeshTile* neis[MAX_NEIS];
-	//		int nneis;
+	// Create connections with neighbour tiles.
+	const MAX_NEIS int = 32
+	var neis [MAX_NEIS]*DtMeshTile
+	var nneis int
 
-	//		// Connect with layers in current tile.
-	//		nneis = getTilesAt(header->x, header->y, neis, MAX_NEIS);
-	//		for (int j = 0; j < nneis; ++j)
-	//		{
-	//			if (neis[j] == tile)
-	//				continue;
+	// Connect with layers in current tile.
+	nneis = this.GetTilesAt(header.X, header.Y, neis[:], MAX_NEIS)
+	for j := 0; j < nneis; j++ {
+		if neis[j] == tile {
+			continue
+		}
+		this.connectExtLinks(tile, neis[j], -1)
+		this.connectExtLinks(neis[j], tile, -1)
+		this.connectExtOffMeshLinks(tile, neis[j], -1)
+		this.connectExtOffMeshLinks(neis[j], tile, -1)
+	}
 
-	//			connectExtLinks(tile, neis[j], -1);
-	//			connectExtLinks(neis[j], tile, -1);
-	//			connectExtOffMeshLinks(tile, neis[j], -1);
-	//			connectExtOffMeshLinks(neis[j], tile, -1);
-	//		}
+	// Connect with neighbour tiles.
+	for i := 0; i < 8; i++ {
+		nneis = this.GetNeighbourTilesAt(header.X, header.Y, i, neis[:], MAX_NEIS)
+		for j := 0; j < nneis; j++ {
+			this.connectExtLinks(tile, neis[j], i)
+			this.connectExtLinks(neis[j], tile, DtOppositeTile(i))
+			this.connectExtOffMeshLinks(tile, neis[j], i)
+			this.connectExtOffMeshLinks(neis[j], tile, DtOppositeTile(i))
+		}
+	}
 
-	//		// Connect with neighbour tiles.
-	//		for (int i = 0; i < 8; ++i)
-	//		{
-	//			nneis = getNeighbourTilesAt(header->x, header->y, i, neis, MAX_NEIS);
-	//			for (int j = 0; j < nneis; ++j)
-	//			{
-	//				connectExtLinks(tile, neis[j], i);
-	//				connectExtLinks(neis[j], tile, dtOppositeTile(i));
-	//				connectExtOffMeshLinks(tile, neis[j], i);
-	//				connectExtOffMeshLinks(neis[j], tile, dtOppositeTile(i));
-	//			}
-	//		}
-
-	//		if (result)
-	//			*result = getTileRef(tile);
-
+	if result != nil {
+		*result = this.GetTileRef(tile)
+	}
 	return DT_SUCCESS
 }
 
@@ -681,6 +957,66 @@ func (this *DtNavMesh) GetTileAt(x, y, layer int32) *DtMeshTile {
 	return nil
 }
 
+/// Returns neighbour tile based on side.
+func (this *DtNavMesh) GetNeighbourTilesAt(x, y int32, side int, tiles []*DtMeshTile, maxTiles int) int {
+	nx := x
+	ny := y
+	switch side {
+	case 0:
+		nx++
+	case 1:
+		nx++
+		ny++
+	case 2:
+		ny++
+	case 3:
+		nx--
+		ny++
+	case 4:
+		nx--
+	case 5:
+		nx--
+		ny--
+	case 6:
+		ny--
+	case 7:
+		nx++
+		ny--
+	}
+	return this.GetTilesAt(nx, ny, tiles, maxTiles)
+}
+
+/// Gets all tiles at the specified grid location. (All layers.)
+///  @param[in]		x			The tile's x-location. (x, y)
+///  @param[in]		y			The tile's y-location. (x, y)
+///  @param[out]	tiles		A pointer to an array of tiles that will hold the result.
+///  @param[in]		maxTiles	The maximum tiles the tiles parameter can hold.
+/// @return The number of tiles returned in the tiles array.
+func (this *DtNavMesh) GetTilesAt(x, y int32, tiles []*DtMeshTile, maxTiles int) int {
+	/// @par
+	///
+	/// This function will not fail if the tiles array is too small to hold the
+	/// entire result set.  It will simply fill the array to capacity.
+	n := 0
+
+	// Find tile based on hash.
+	h := computeTileHash(x, y, this.m_tileLutMask)
+	tile := this.m_posLookup[h]
+	for tile != nil {
+		if tile.Header != nil &&
+			tile.Header.X == x &&
+			tile.Header.Y == y {
+			if n < maxTiles {
+				tiles[n] = tile
+				n++
+			}
+		}
+		tile = tile.Next
+	}
+
+	return n
+}
+
 /// Returns the tile and polygon for the specified polygon reference.
 ///  @param[in]		ref		A known valid reference for a polygon.
 ///  @param[out]	tile	The tile containing the polygon.
@@ -696,6 +1032,19 @@ func (this *DtNavMesh) GetTileAndPolyByRefUnsafe(ref DtPolyRef, tile **DtMeshTil
 	this.DecodePolyId(ref, &salt, &it, &ip)
 	*tile = &(this.m_tiles[it])
 	*poly = &(this.m_tiles[it].Polys[ip])
+}
+
+/// Gets the tile reference for the specified tile.
+///  @param[in]	tile	The tile.
+/// @return The tile reference of the tile.
+func (this *DtNavMesh) GetTileRef(tile *DtMeshTile) DtTileRef {
+	if tile == nil {
+		return 0
+	}
+	tileBase := uintptr(unsafe.Pointer(&(this.m_tiles[0])))
+	current := uintptr(unsafe.Pointer(tile))
+	it := (uint32)(current - tileBase)
+	return (DtTileRef)(this.EncodePolyId(tile.Salt, it, 0))
 }
 
 /// Gets the polygon reference for the tile's base polygon.
@@ -720,10 +1069,8 @@ func (this *DtNavMesh) GetPolyRefBase(tile *DtMeshTile) DtPolyRef {
 	if tile == nil {
 		return 0
 	}
-
 	tileBase := uintptr(unsafe.Pointer(&(this.m_tiles[0])))
 	current := uintptr(unsafe.Pointer(tile))
-
 	it := (uint32)(current - tileBase)
 	return this.EncodePolyId(tile.Salt, it, 0)
 }

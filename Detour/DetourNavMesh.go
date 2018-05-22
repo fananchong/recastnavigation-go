@@ -40,7 +40,7 @@ const DT_EXT_LINK uint16 = 0x8000
 const DT_NULL_LINK uint32 = 0xffffffff
 
 /// A flag that indicates that an off-mesh connection can be traversed in both directions. (Is bidirectional.)
-const DT_OFFMESH_CON_BIDIR uint32 = 1
+const DT_OFFMESH_CON_BIDIR uint8 = 1
 
 /// The maximum number of user defined area ids.
 /// @ingroup detour
