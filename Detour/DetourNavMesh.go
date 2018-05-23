@@ -44,7 +44,7 @@ const DT_OFFMESH_CON_BIDIR uint8 = 1
 
 /// The maximum number of user defined area ids.
 /// @ingroup detour
-const DT_MAX_AREAS int32 = 64
+const DT_MAX_AREAS int = 64
 
 /// Tile flags used for various functions and fields.
 /// For an example, see dtNavMesh::addTile().
