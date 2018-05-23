@@ -94,7 +94,8 @@ func Test_dtNavMesh2(t *testing.T) {
 		d += int32(unsafe.Sizeof(*tileHeader))
 
 		data := meshData[d : d+tileHeader.dataSize]
-		navMesh.AddTile(data, int(tileHeader.dataSize), detour.DT_TILE_FREE_DATA, tileHeader.tileRef, nil)
+		state = navMesh.AddTile(data, int(tileHeader.dataSize), detour.DT_TILE_FREE_DATA, tileHeader.tileRef, nil)
+		detour.DtAssert(detour.DtStatusSucceed(state))
 		d += tileHeader.dataSize
 	}
 }

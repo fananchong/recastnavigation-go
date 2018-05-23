@@ -289,6 +289,38 @@ func (this *DtNavMesh) findConnectingPolys(va, vb []float32, tile *DtMeshTile, s
 	return n
 }
 
+/// Removes external links at specified side.
+func (this *DtNavMesh) unconnectLinks(tile, target *DtMeshTile) {
+	if tile == nil || target == nil {
+		return
+	}
+
+	targetNum := this.DecodePolyIdTile(DtPolyRef(this.GetTileRef(target)))
+
+	for i := 0; i < int(tile.Header.PolyCount); i++ {
+		poly := &tile.Polys[i]
+		j := poly.FirstLink
+		pj := DT_NULL_LINK
+		for j != DT_NULL_LINK {
+			if this.DecodePolyIdTile(tile.Links[j].Ref) == targetNum {
+				// Remove link.
+				nj := tile.Links[j].Next
+				if pj == DT_NULL_LINK {
+					poly.FirstLink = nj
+				} else {
+					tile.Links[pj].Next = nj
+				}
+				freeLink(tile, j)
+				j = nj
+			} else {
+				// Advance
+				pj = j
+				j = tile.Links[j].Next
+			}
+		}
+	}
+}
+
 /// Builds external polygon links for a tile.
 func (this *DtNavMesh) connectExtLinks(tile, target *DtMeshTile, side int) {
 	if tile == nil {
@@ -1035,6 +1067,92 @@ func (this *DtNavMesh) GetTilesAt(x, y int32, tiles []*DtMeshTile, maxTiles int)
 	return n
 }
 
+/// Gets the tile reference for the tile at specified grid location.
+///  @param[in]	x		The tile's x-location. (x, y, layer)
+///  @param[in]	y		The tile's y-location. (x, y, layer)
+///  @param[in]	layer	The tile's layer. (x, y, layer)
+/// @return The tile reference of the tile, or 0 if there is none.
+func (this *DtNavMesh) GetTileRefAt(x, y, layer int32) DtTileRef {
+	// Find tile based on hash.
+	h := computeTileHash(x, y, this.m_tileLutMask)
+	tile := this.m_posLookup[h]
+	for tile != nil {
+		if tile.Header != nil &&
+			tile.Header.X == x &&
+			tile.Header.Y == y &&
+			tile.Header.Layer == layer {
+			return this.GetTileRef(tile)
+		}
+		tile = tile.Next
+	}
+	return 0
+}
+
+/// Gets the tile for the specified tile reference.
+///  @param[in]	ref		The tile reference of the tile to retrieve.
+/// @return The tile for the specified reference, or null if the
+///		reference is invalid.
+func (this *DtNavMesh) GetTileByRef(ref DtTileRef) *DtMeshTile {
+	if ref == 0 {
+		return nil
+	}
+	tileIndex := this.DecodePolyIdTile((DtPolyRef)(ref))
+	tileSalt := this.DecodePolyIdSalt((DtPolyRef)(ref))
+	if (int32)(tileIndex) >= this.m_maxTiles {
+		return nil
+	}
+	tile := &this.m_tiles[tileIndex]
+	if tile.Salt != tileSalt {
+		return nil
+	}
+	return tile
+}
+
+/// The maximum number of tiles supported by the navigation mesh.
+/// @return The maximum number of tiles supported by the navigation mesh.
+func (this *DtNavMesh) GetMaxTiles() int32 {
+	return this.m_maxTiles
+}
+
+/// Returns pointer to tile in the tile array.
+func (this *DtNavMesh) GetTile(i int) *DtMeshTile {
+	return &this.m_tiles[i]
+}
+
+/// Calculates the tile grid location for the specified world position.
+///  @param[in]	pos  The world position for the query. [(x, y, z)]
+///  @param[out]	tx		The tile's x-location. (x, y)
+///  @param[out]	ty		The tile's y-location. (x, y)
+func (this *DtNavMesh) CalcTileLoc(pos []float32, tx, ty *int32) {
+	*tx = (int32)(math.Floor(float64(pos[0]-this.m_orig[0]) / float64(this.m_tileWidth)))
+	*ty = (int32)(math.Floor(float64(pos[2]-this.m_orig[2]) / float64(this.m_tileHeight)))
+}
+
+/// Gets the tile and polygon for the specified polygon reference.
+///  @param[in]		ref		The reference for the a polygon.
+///  @param[out]	tile	The tile containing the polygon.
+///  @param[out]	poly	The polygon.
+/// @return The status flags for the operation.
+func (this *DtNavMesh) GetTileAndPolyByRef(ref DtPolyRef, tile **DtMeshTile, poly **DtPoly) DtStatus {
+	if ref == 0 {
+		return DT_FAILURE
+	}
+	var salt, it, ip uint32
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if ip >= (uint32)(this.m_tiles[it].Header.PolyCount) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	*tile = &(this.m_tiles[it])
+	*poly = &(this.m_tiles[it].Polys[ip])
+	return DT_SUCCESS
+}
+
 /// Returns the tile and polygon for the specified polygon reference.
 ///  @param[in]		ref		A known valid reference for a polygon.
 ///  @param[out]	tile	The tile containing the polygon.
@@ -1050,6 +1168,132 @@ func (this *DtNavMesh) GetTileAndPolyByRefUnsafe(ref DtPolyRef, tile **DtMeshTil
 	this.DecodePolyId(ref, &salt, &it, &ip)
 	*tile = &(this.m_tiles[it])
 	*poly = &(this.m_tiles[it].Polys[ip])
+}
+
+/// Checks the validity of a polygon reference.
+///  @param[in]	ref		The polygon reference to check.
+/// @return True if polygon reference is valid for the navigation mesh.
+func (this *DtNavMesh) IsValidPolyRef(ref DtPolyRef) bool {
+	if ref == 0 {
+		return false
+	}
+	var salt, it, ip uint32
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return false
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return false
+	}
+	if ip >= (uint32)(this.m_tiles[it].Header.PolyCount) {
+		return false
+	}
+	return true
+}
+
+/// Removes the specified tile from the navigation mesh.
+///  @param[in]		ref			The reference of the tile to remove.
+///  @param[out]	data		Data associated with deleted tile.
+///  @param[out]	dataSize	Size of the data associated with deleted tile.
+/// @return The status flags for the operation.
+func (this *DtNavMesh) RemoveTile(ref DtTileRef, data *[]byte, dataSize *int) DtStatus {
+	/// @par
+	///
+	/// This function returns the data for the tile so that, if desired,
+	/// it can be added back to the navigation mesh at a later point.
+	if ref == 0 {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tileIndex := this.DecodePolyIdTile((DtPolyRef)(ref))
+	tileSalt := this.DecodePolyIdSalt((DtPolyRef)(ref))
+	if (int32)(tileIndex) >= this.m_maxTiles {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tile := &this.m_tiles[tileIndex]
+	if tile.Salt != tileSalt {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	// Remove tile from hash lookup.
+	h := computeTileHash(tile.Header.X, tile.Header.Y, this.m_tileLutMask)
+	var prev *DtMeshTile = nil
+	cur := this.m_posLookup[h]
+	for cur != nil {
+		if cur == tile {
+			if prev != nil {
+				prev.Next = cur.Next
+			} else {
+				this.m_posLookup[h] = cur.Next
+			}
+			break
+		}
+		prev = cur
+		cur = cur.Next
+	}
+
+	// Remove connections to neighbour tiles.
+	const MAX_NEIS int = 32
+	var neis [MAX_NEIS]*DtMeshTile
+	var nneis int
+
+	// Disconnect from other layers in current tile.
+	nneis = this.GetTilesAt(tile.Header.X, tile.Header.Y, neis[:], MAX_NEIS)
+	for j := 0; j < nneis; j++ {
+		if neis[j] == tile {
+			continue
+		}
+		this.unconnectLinks(neis[j], tile)
+	}
+
+	// Disconnect from neighbour tiles.
+	for i := 0; i < 8; i++ {
+		nneis = this.GetNeighbourTilesAt(tile.Header.X, tile.Header.Y, i, neis[:], MAX_NEIS)
+		for j := 0; j < nneis; j++ {
+			this.unconnectLinks(neis[j], tile)
+		}
+	}
+
+	// Reset tile.
+	if (tile.Flags & DT_TILE_FREE_DATA) != 0 {
+		// Owns data
+		tile.Data = nil
+		tile.DataSize = 0
+		if data != nil {
+			*data = nil
+		}
+		if dataSize != nil {
+			*dataSize = 0
+		}
+	} else {
+		if data != nil {
+			*data = tile.Data
+		}
+		if dataSize != nil {
+			*dataSize = int(tile.DataSize)
+		}
+	}
+
+	tile.Header = nil
+	tile.Flags = 0
+	tile.LinksFreeList = 0
+	tile.Polys = nil
+	tile.Verts = nil
+	tile.Links = nil
+	tile.DetailMeshes = nil
+	tile.DetailVerts = nil
+	tile.DetailTris = nil
+	tile.BvTree = nil
+	tile.OffMeshCons = nil
+
+	// Update salt, salt should never be zero.
+	tile.Salt = (tile.Salt + 1) & ((1 << this.m_saltBits) - 1)
+	if tile.Salt == 0 {
+		tile.Salt++
+	}
+	// Add to free list.
+	tile.Next = this.m_nextFree
+	this.m_nextFree = tile
+
+	return DT_SUCCESS
 }
 
 /// Gets the tile reference for the specified tile.
@@ -1091,4 +1335,317 @@ func (this *DtNavMesh) GetPolyRefBase(tile *DtMeshTile) DtPolyRef {
 	current := uintptr(unsafe.Pointer(tile))
 	it := (uint32)(current - tileBase)
 	return this.EncodePolyId(tile.Salt, it, 0)
+}
+
+type dtTileState struct {
+	magic   int32     // Magic number, used to identify the data.
+	version int32     // Data version number.
+	ref     DtTileRef // Tile ref at the time of storing the data.
+}
+
+type dtPolyState struct {
+	flags uint16 // Flags (see dtPolyFlags).
+	area  uint8  // Area ID of the polygon.
+}
+
+/// Gets the size of the buffer required by #storeTileState to store the specified tile's state.
+///  @param[in]	tile	The tile.
+/// @return The size of the buffer required to store the state.
+func (this *DtNavMesh) GetTileStateSize(tile *DtMeshTile) int {
+	if tile == nil {
+		return 0
+	}
+	headerSize := DtAlign4(int(unsafe.Sizeof(dtTileState{})))
+	polyStateSize := DtAlign4(int(unsafe.Sizeof(dtPolyState{})) * int(tile.Header.PolyCount))
+	return headerSize + polyStateSize
+}
+
+/// Stores the non-structural state of the tile in the specified buffer. (Flags, area ids, etc.)
+///  @param[in]		tile			The tile.
+///  @param[out]	data			The buffer to store the tile's state in.
+///  @param[in]		maxDataSize		The size of the data buffer. [Limit: >= #getTileStateSize]
+/// @return The status flags for the operation.
+func (this *DtNavMesh) StoreTileState(tile *DtMeshTile, data []byte, maxDataSize int) DtStatus {
+	/// @par
+	///
+	/// Tile state includes non-structural data such as polygon flags, area ids, etc.
+	/// @note The state data is only valid until the tile reference changes.
+	/// @see #getTileStateSize, #restoreTileState
+
+	// Make sure there is enough space to store the state.
+	sizeReq := this.GetTileStateSize(tile)
+	if maxDataSize < sizeReq {
+		return DT_FAILURE | DT_BUFFER_TOO_SMALL
+	}
+
+	tileState := (*dtTileState)(unsafe.Pointer(&(data[0])))
+	var polyStates []dtPolyState
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&polyStates)))
+	sliceHeader.Cap = int(tile.Header.PolyCount)
+	sliceHeader.Len = int(tile.Header.PolyCount)
+	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[DtAlign4(int(unsafe.Sizeof(dtTileState{})))])))
+
+	// Store tile state.
+	tileState.magic = DT_NAVMESH_STATE_MAGIC
+	tileState.version = DT_NAVMESH_STATE_VERSION
+	tileState.ref = this.GetTileRef(tile)
+
+	// Store per poly state.
+	for i := 0; i < int(tile.Header.PolyCount); i++ {
+		p := &tile.Polys[i]
+		s := &polyStates[i]
+		s.flags = p.Flags
+		s.area = p.GetArea()
+	}
+
+	return DT_SUCCESS
+}
+
+/// Restores the state of the tile.
+///  @param[in]	tile			The tile.
+///  @param[in]	data			The new state. (Obtained from #storeTileState.)
+///  @param[in]	maxDataSize		The size of the state within the data buffer.
+/// @return The status flags for the operation.
+func (this *DtNavMesh) RestoreTileState(tile *DtMeshTile, data []byte, maxDataSize int) DtStatus {
+	/// @par
+	///
+	/// Tile state includes non-structural data such as polygon flags, area ids, etc.
+	/// @note This function does not impact the tile's #dtTileRef and #dtPolyRef's.
+	/// @see #storeTileState
+
+	// Make sure there is enough space to store the state.
+	sizeReq := this.GetTileStateSize(tile)
+	if maxDataSize < sizeReq {
+		return DT_FAILURE | DT_BUFFER_TOO_SMALL
+	}
+
+	tileState := (*dtTileState)(unsafe.Pointer(&(data[0])))
+	var polyStates []dtPolyState
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&polyStates)))
+	sliceHeader.Cap = int(tile.Header.PolyCount)
+	sliceHeader.Len = int(tile.Header.PolyCount)
+	sliceHeader.Data = uintptr(unsafe.Pointer(&(data[DtAlign4(int(unsafe.Sizeof(dtTileState{})))])))
+
+	// Check that the restore is possible.
+	if tileState.magic != DT_NAVMESH_STATE_MAGIC {
+		return DT_FAILURE | DT_WRONG_MAGIC
+	}
+	if tileState.version != DT_NAVMESH_STATE_VERSION {
+		return DT_FAILURE | DT_WRONG_VERSION
+	}
+	if tileState.ref != this.GetTileRef(tile) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+
+	// Restore per poly state.
+	for i := 0; i < int(tile.Header.PolyCount); i++ {
+		p := &tile.Polys[i]
+		s := &polyStates[i]
+		p.Flags = s.flags
+		p.SetArea(s.area)
+	}
+
+	return DT_SUCCESS
+}
+
+/// Gets the endpoints for an off-mesh connection, ordered by "direction of travel".
+///  @param[in]		prevRef		The reference of the polygon before the connection.
+///  @param[in]		polyRef		The reference of the off-mesh connection polygon.
+///  @param[out]	startPos	The start position of the off-mesh connection. [(x, y, z)]
+///  @param[out]	endPos		The end position of the off-mesh connection. [(x, y, z)]
+/// @return The status flags for the operation.
+func (this *DtNavMesh) GetOffMeshConnectionPolyEndPoints(prevRef, polyRef DtPolyRef, startPos, endPos []float32) DtStatus {
+	/// @par
+	///
+	/// Off-mesh connections are stored in the navigation mesh as special 2-vertex
+	/// polygons with a single edge. At least one of the vertices is expected to be
+	/// inside a normal polygon. So an off-mesh connection is "entered" from a
+	/// normal polygon at one of its endpoints. This is the polygon identified by
+	/// the prevRef parameter.
+
+	var salt, it, ip uint32
+
+	if polyRef == 0 {
+		return DT_FAILURE
+	}
+	// Get current polygon
+	this.DecodePolyId(polyRef, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tile := &this.m_tiles[it]
+	if ip >= (uint32)(tile.Header.PolyCount) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	poly := &tile.Polys[ip]
+
+	// Make sure that the current poly is indeed off-mesh link.
+	if poly.GetType() != DT_POLYTYPE_OFFMESH_CONNECTION {
+		return DT_FAILURE
+	}
+	// Figure out which way to hand out the vertices.
+	idx0 := 0
+	idx1 := 1
+
+	// Find link that points to first vertex.
+	for i := poly.FirstLink; i != DT_NULL_LINK; i = tile.Links[i].Next {
+		if tile.Links[i].Edge == 0 {
+			if tile.Links[i].Ref != prevRef {
+				idx0 = 1
+				idx1 = 0
+			}
+			break
+		}
+	}
+
+	DtVcopy(startPos, tile.Verts[poly.Verts[idx0]*3:])
+	DtVcopy(endPos, tile.Verts[poly.Verts[idx1]*3:])
+
+	return DT_SUCCESS
+}
+
+/// Gets the specified off-mesh connection.
+///  @param[in]	ref		The polygon reference of the off-mesh connection.
+/// @return The specified off-mesh connection, or null if the polygon reference is not valid.
+func (this *DtNavMesh) GetOffMeshConnectionByRef(ref DtPolyRef) *DtOffMeshConnection {
+	var salt, it, ip uint32
+
+	if ref == 0 {
+		return nil
+	}
+
+	// Get current polygon
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return nil
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return nil
+	}
+	tile := &this.m_tiles[it]
+	if ip >= (uint32)(tile.Header.PolyCount) {
+		return nil
+	}
+	poly := &tile.Polys[ip]
+
+	// Make sure that the current poly is indeed off-mesh link.
+	if poly.GetType() != DT_POLYTYPE_OFFMESH_CONNECTION {
+		return nil
+	}
+
+	idx := ip - uint32(tile.Header.OffMeshBase)
+	DtAssert(idx < uint32(tile.Header.OffMeshConCount))
+	return &tile.OffMeshCons[idx]
+}
+
+/// Sets the user defined flags for the specified polygon.
+///  @param[in]	ref		The polygon reference.
+///  @param[in]	flags	The new flags for the polygon.
+/// @return The status flags for the operation.
+func (this *DtNavMesh) SetPolyFlags(ref DtPolyRef, flags uint16) DtStatus {
+	if ref == 0 {
+		return DT_FAILURE
+	}
+	var salt, it, ip uint32
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tile := &this.m_tiles[it]
+	if ip >= (uint32)(tile.Header.PolyCount) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	poly := &tile.Polys[ip]
+
+	// Change flags.
+	poly.Flags = flags
+
+	return DT_SUCCESS
+}
+
+/// Gets the user defined flags for the specified polygon.
+///  @param[in]		ref				The polygon reference.
+///  @param[out]	resultFlags		The polygon flags.
+/// @return The status flags for the operation.
+func (this *DtNavMesh) GetPolyFlags(ref DtPolyRef, resultFlags *uint16) DtStatus {
+	if ref == 0 {
+		return DT_FAILURE
+	}
+	var salt, it, ip uint32
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tile := &this.m_tiles[it]
+	if ip >= (uint32)(tile.Header.PolyCount) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	poly := &tile.Polys[ip]
+
+	*resultFlags = poly.Flags
+
+	return DT_SUCCESS
+}
+
+/// Sets the user defined area for the specified polygon.
+///  @param[in]	ref		The polygon reference.
+///  @param[in]	area	The new area id for the polygon. [Limit: < #DT_MAX_AREAS]
+/// @return The status flags for the operation.
+func (this *DtNavMesh) SetPolyArea(ref DtPolyRef, area uint8) DtStatus {
+	if ref == 0 {
+		return DT_FAILURE
+	}
+	var salt, it, ip uint32
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tile := &this.m_tiles[it]
+	if ip >= (uint32)(tile.Header.PolyCount) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	poly := &tile.Polys[ip]
+
+	poly.SetArea(area)
+
+	return DT_SUCCESS
+}
+
+/// Gets the user defined area for the specified polygon.
+///  @param[in]		ref			The polygon reference.
+///  @param[out]	resultArea	The area id for the polygon.
+/// @return The status flags for the operation.
+func (this *DtNavMesh) GetPolyArea(ref DtPolyRef, resultArea *uint8) DtStatus {
+	if ref == 0 {
+		return DT_FAILURE
+	}
+	var salt, it, ip uint32
+	this.DecodePolyId(ref, &salt, &it, &ip)
+	if it >= (uint32)(this.m_maxTiles) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if this.m_tiles[it].Salt != salt || this.m_tiles[it].Header == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	tile := &this.m_tiles[it]
+	if ip >= (uint32)(tile.Header.PolyCount) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	poly := &tile.Polys[ip]
+
+	*resultArea = poly.GetArea()
+
+	return DT_SUCCESS
 }
