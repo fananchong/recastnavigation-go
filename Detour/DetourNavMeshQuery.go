@@ -86,7 +86,7 @@ type DtRaycastHit struct {
 type dtPolyQuery interface {
 	/// Called for each batch of unique polygons touched by the search area in dtNavMeshQuery::queryPolygons.
 	/// This can be called multiple times for a single query.
-	Process(tile *DtMeshTile, polys **DtPoly, refs *DtPolyRef, count int)
+	Process(tile *DtMeshTile, polys []*DtPoly, refs []DtPolyRef, count int)
 }
 
 type dtQueryData struct {
