@@ -75,7 +75,7 @@ func (this *DtNodePool) FindNode(id DtPolyRef, state uint8) *DtNode {
 	bucket := DtHashRef(id) & (this.m_hashSize - 1)
 	i := this.m_first[bucket]
 	for i != DT_NULL_IDX {
-		if this.m_nodes[i].Id == id && this.m_nodes[i].GetState() == state {
+		if this.m_nodes[i].Id == id && this.m_nodes[i].State == state {
 			return &this.m_nodes[i]
 		}
 		i = this.m_next[i]
@@ -88,7 +88,7 @@ func (this *DtNodePool) GetNode(id DtPolyRef, state uint8) *DtNode {
 	i := this.m_first[bucket]
 	var node *DtNode = nil
 	for i != DT_NULL_IDX {
-		if this.m_nodes[i].Id == id && this.m_nodes[i].GetState() == state {
+		if this.m_nodes[i].Id == id && this.m_nodes[i].State == state {
 			return &this.m_nodes[i]
 		}
 		i = this.m_next[i]
@@ -103,12 +103,12 @@ func (this *DtNodePool) GetNode(id DtPolyRef, state uint8) *DtNode {
 
 	// Init node
 	node = &this.m_nodes[i]
-	node.SetPidx(0)
+	node.Pidx = 0
 	node.Cost = 0
 	node.Total = 0
 	node.Id = id
-	node.SetState(state)
-	node.SetFlags(0)
+	node.State = state
+	node.Flags = 0
 
 	this.m_next[i] = this.m_first[bucket]
 	this.m_first[bucket] = i

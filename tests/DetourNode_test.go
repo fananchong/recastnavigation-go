@@ -10,15 +10,12 @@ import (
 
 func Test_dtNodePool(t *testing.T) {
 	detour.DtAssert(uint16(detour.DT_NULL_IDX) == 0xffff)
-	detour.DtAssert(detour.DT_NODE_PARENT_MASK == 0x00ffffff)
-	detour.DtAssert(detour.DT_NODE_STATE_MASK == 0x03000000)
-	detour.DtAssert(detour.DT_NODE_FLAGS_MASK == 0x1C000000)
 
 	node := &detour.DtNode{}
-	node.SetPidx(7)
-	node.SetState(2)
-	node.SetFlags(detour.DT_NODE_PARENT_DETACHED)
-	detour.DtAssert(node.GetPidx() == 7 && node.GetState() == 2 && node.GetFlags() == detour.DT_NODE_PARENT_DETACHED)
+	node.Pidx = 7
+	node.State = 2
+	node.Flags = detour.DT_NODE_PARENT_DETACHED
+	detour.DtAssert(node.Pidx == 7 && node.State == 2 && node.Flags == detour.DT_NODE_PARENT_DETACHED)
 
 	pool := detour.DtAllocNodePool(50, 4)
 	ns1 := make([]*detour.DtNode, 0)

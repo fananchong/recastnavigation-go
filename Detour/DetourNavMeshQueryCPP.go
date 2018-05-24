@@ -283,11 +283,11 @@ func (this *DtNavMeshQuery) FindRandomPointAroundCircle(startRef DtPolyRef, cent
 
 	startNode := this.m_nodePool.GetNode(startRef, 0)
 	DtVcopy(startNode.Pos[:], centerPos)
-	startNode.SetPidx(0)
+	startNode.Pidx = 0
 	startNode.Cost = 0
 	startNode.Total = 0
 	startNode.Id = startRef
-	startNode.SetFlags(DT_NODE_OPEN)
+	startNode.Flags = DT_NODE_OPEN
 	this.m_openList.Push(startNode)
 
 	status := DT_SUCCESS
@@ -301,8 +301,8 @@ func (this *DtNavMeshQuery) FindRandomPointAroundCircle(startRef DtPolyRef, cent
 
 	for !this.m_openList.Empty() {
 		bestNode := this.m_openList.Pop()
-		bestNode.SetFlags(bestNode.GetFlags() & ^DT_NODE_OPEN)
-		bestNode.SetFlags(bestNode.GetFlags() | DT_NODE_CLOSED)
+		bestNode.Flags &= ^DT_NODE_OPEN
+		bestNode.Flags |= DT_NODE_CLOSED
 
 		// Get poly and tile.
 		// The API input has been cheked already, skip checking internal data.
@@ -335,8 +335,8 @@ func (this *DtNavMeshQuery) FindRandomPointAroundCircle(startRef DtPolyRef, cent
 		var parentRef DtPolyRef
 		var parentTile *DtMeshTile
 		var parentPoly *DtPoly
-		if bestNode.GetPidx() != 0 {
-			parentRef = this.m_nodePool.GetNodeAtIdx(bestNode.GetPidx()).Id
+		if bestNode.Pidx != 0 {
+			parentRef = this.m_nodePool.GetNodeAtIdx(bestNode.Pidx).Id
 		}
 		if parentRef != 0 {
 			this.m_nav.GetTileAndPolyByRefUnsafe(parentRef, &parentTile, &parentPoly)
@@ -374,28 +374,28 @@ func (this *DtNavMeshQuery) FindRandomPointAroundCircle(startRef DtPolyRef, cent
 				continue
 			}
 
-			if (neighbourNode.GetFlags() & DT_NODE_CLOSED) != 0 {
+			if (neighbourNode.Flags & DT_NODE_CLOSED) != 0 {
 				continue
 			}
 			// Cost
-			if neighbourNode.GetFlags() == 0 {
+			if neighbourNode.Flags == 0 {
 				DtVlerp(neighbourNode.Pos[:], va[:], vb[:], 0.5)
 			}
 			total := bestNode.Total + DtVdist(bestNode.Pos[:], neighbourNode.Pos[:])
 
 			// The node is already in open list and the new result is worse, skip.
-			if (neighbourNode.GetFlags()&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
+			if (neighbourNode.Flags&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
 				continue
 			}
 			neighbourNode.Id = neighbourRef
-			neighbourNode.SetFlags(neighbourNode.GetFlags() & ^DT_NODE_CLOSED)
-			neighbourNode.SetPidx(this.m_nodePool.GetNodeIdx(bestNode))
+			neighbourNode.Flags = neighbourNode.Flags & ^DT_NODE_CLOSED
+			neighbourNode.Pidx = this.m_nodePool.GetNodeIdx(bestNode)
 			neighbourNode.Total = total
 
-			if (neighbourNode.GetFlags() & DT_NODE_OPEN) != 0 {
+			if (neighbourNode.Flags & DT_NODE_OPEN) != 0 {
 				this.m_openList.Modify(neighbourNode)
 			} else {
-				neighbourNode.SetFlags(DT_NODE_OPEN)
+				neighbourNode.Flags = DT_NODE_OPEN
 				this.m_openList.Push(neighbourNode)
 			}
 		}

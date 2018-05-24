@@ -4,7 +4,7 @@ import (
 	"unsafe"
 )
 
-type DtNodeFlags int
+type DtNodeFlags uint8
 
 const (
 	DT_NODE_OPEN            DtNodeFlags = 0x01
@@ -21,46 +21,13 @@ const DT_NODE_STATE_BITS uint32 = 2
 const DT_NODE_FLAGS_BITS uint32 = 3
 
 type DtNode struct {
-	Pos   [3]float32 ///< Position of the node.
-	Cost  float32    ///< Cost from previous node to current node.
-	Total float32    ///< Cost up to the node.
-
-	//	unsigned int pidx : DT_NODE_PARENT_BITS;	///< Index to parent node.
-	//	unsigned int state : DT_NODE_STATE_BITS;	///< extra state information. A polyRef can have multiple nodes with different extra info. see DT_MAX_STATES_PER_NODE
-	//	unsigned int flags : 3;						///< Node flags. A combination of dtNodeFlags.
-	mixture uint32
-
-	Id DtPolyRef ///< Polygon ref the node corresponds to.
-}
-
-/// golang no support bitfields. so see GetPidx、SetPidx、GetState、SetState、GetFlags、SetFlags
-const DT_NODE_PARENT_MASK = (uint32(1) << DT_NODE_PARENT_BITS) - 1
-const DT_NODE_STATE_MASK = ((uint32(1) << DT_NODE_STATE_BITS) - 1) << DT_NODE_PARENT_BITS
-const DT_NODE_FLAGS_MASK = ((uint32(1) << DT_NODE_FLAGS_BITS) - 1) << (DT_NODE_PARENT_BITS + DT_NODE_STATE_BITS)
-const DT_NODE_PARENT_MASK2 = ^DT_NODE_PARENT_MASK
-const DT_NODE_STATE_MASK2 = ^DT_NODE_STATE_MASK
-const DT_NODE_FLAGS_MASK2 = ^DT_NODE_FLAGS_MASK
-
-func (this *DtNode) GetPidx() uint32 {
-	return this.mixture & DT_NODE_PARENT_MASK
-}
-func (this *DtNode) SetPidx(pidx uint32) {
-	this.mixture &= DT_NODE_PARENT_MASK2
-	this.mixture |= pidx
-}
-func (this *DtNode) GetState() uint8 {
-	return uint8((this.mixture & DT_NODE_STATE_MASK) >> DT_NODE_PARENT_BITS)
-}
-func (this *DtNode) SetState(state uint8) {
-	this.mixture &= DT_NODE_STATE_MASK2
-	this.mixture |= (uint32(state) << DT_NODE_PARENT_BITS)
-}
-func (this *DtNode) GetFlags() DtNodeFlags {
-	return DtNodeFlags((this.mixture & DT_NODE_FLAGS_MASK) >> (DT_NODE_PARENT_BITS + DT_NODE_STATE_BITS))
-}
-func (this *DtNode) SetFlags(flags DtNodeFlags) {
-	this.mixture &= DT_NODE_FLAGS_MASK2
-	this.mixture |= (uint32(flags) << (DT_NODE_PARENT_BITS + DT_NODE_STATE_BITS))
+	Pos   [3]float32  ///< Position of the node.
+	Cost  float32     ///< Cost from previous node to current node.
+	Total float32     ///< Cost up to the node.
+	Pidx  uint32      ///< Index to parent node.
+	State uint8       ///< extra state information. A polyRef can have multiple nodes with different extra info. see DT_MAX_STATES_PER_NODE
+	Flags DtNodeFlags ///< Node flags. A combination of dtNodeFlags.
+	Id    DtPolyRef   ///< Polygon ref the node corresponds to.
 }
 
 const DT_MAX_STATES_PER_NODE int = 1 << DT_NODE_STATE_BITS // number of extra states per node. See dtNode::state
