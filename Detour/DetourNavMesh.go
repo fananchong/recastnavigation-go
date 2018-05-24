@@ -91,7 +91,7 @@ const (
 const DT_RAY_CAST_LIMIT_PROPORTIONS float32 = 50.0
 
 /// Flags representing the type of a navigation mesh polygon.
-type DtPolyTypes int
+type DtPolyTypes uint8
 
 const (
 	/// The polygon is a standard convex polygon that is part of the surface of the mesh.

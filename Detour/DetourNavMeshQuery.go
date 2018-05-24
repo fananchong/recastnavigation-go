@@ -83,7 +83,7 @@ type DtRaycastHit struct {
 /// Provides custom polygon query behavior.
 /// Used by dtNavMeshQuery::queryPolygons.
 /// @ingroup detour
-type dtPolyQuery interface {
+type DtPolyQuery interface {
 	/// Called for each batch of unique polygons touched by the search area in dtNavMeshQuery::queryPolygons.
 	/// This can be called multiple times for a single query.
 	Process(tile *DtMeshTile, polys []*DtPoly, refs []DtPolyRef, count int)

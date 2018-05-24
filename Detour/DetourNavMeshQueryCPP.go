@@ -733,7 +733,7 @@ func (this *DtNavMeshQuery) FindNearestPoly(center, halfExtents []float32,
 
 /// Queries polygons within a tile.
 func (this *DtNavMeshQuery) queryPolygonsInTile(tile *DtMeshTile, qmin, qmax []float32,
-	filter *DtQueryFilter, query dtPolyQuery) {
+	filter *DtQueryFilter, query DtPolyQuery) {
 	DtAssert(this.m_nav != nil)
 	const batchSize int = 32
 	var polyRefs [batchSize]DtPolyRef
@@ -908,7 +908,7 @@ func (this *DtNavMeshQuery) QueryPolygons(center, halfExtents []float32,
 ///  @param[in]		filter		The polygon filter to apply to the query.
 ///  @param[in]		query		The query. Polygons found will be batched together and passed to this query.
 func (this *DtNavMeshQuery) QueryPolygons2(center, halfExtents []float32,
-	filter *DtQueryFilter, query dtPolyQuery) DtStatus {
+	filter *DtQueryFilter, query DtPolyQuery) DtStatus {
 	/// @par
 	///
 	/// The query will be invoked with batches of polygons. Polygons passed
@@ -943,6 +943,260 @@ func (this *DtNavMeshQuery) QueryPolygons2(center, halfExtents []float32,
 	}
 
 	return DT_SUCCESS
+}
+
+/// Finds a path from the start polygon to the end polygon.
+///  @param[in]		startRef	The refrence id of the start polygon.
+///  @param[in]		endRef		The reference id of the end polygon.
+///  @param[in]		startPos	A position within the start polygon. [(x, y, z)]
+///  @param[in]		endPos		A position within the end polygon. [(x, y, z)]
+///  @param[in]		filter		The polygon filter to apply to the query.
+///  @param[out]	path		An ordered list of polygon references representing the path. (Start to end.)
+///  							[(polyRef) * @p pathCount]
+///  @param[out]	pathCount	The number of polygons returned in the @p path array.
+///  @param[in]		maxPath		The maximum number of polygons the @p path array can hold. [Limit: >= 1]
+func (this *DtNavMeshQuery) FindPath(startRef, endRef DtPolyRef,
+	startPos, endPos []float32,
+	filter *DtQueryFilter,
+	path []DtPolyRef, pathCount *int, maxPath int) DtStatus {
+	/// @par
+	///
+	/// If the end polygon cannot be reached through the navigation graph,
+	/// the last polygon in the path will be the nearest the end polygon.
+	///
+	/// If the path array is to small to hold the full result, it will be filled as
+	/// far as possible from the start polygon toward the end polygon.
+	///
+	/// The start and end positions are used to calculate traversal costs.
+	/// (The y-values impact the result.)
+	///
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_nodePool != nil)
+	DtAssert(this.m_openList != nil)
+
+	if pathCount != nil {
+		*pathCount = 0
+	}
+	// Validate input
+	if !this.m_nav.IsValidPolyRef(startRef) || !this.m_nav.IsValidPolyRef(endRef) ||
+		startPos == nil || endPos == nil || filter == nil || maxPath <= 0 || path == nil || pathCount == nil {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if startRef == endRef {
+		path[0] = startRef
+		*pathCount = 1
+		return DT_SUCCESS
+	}
+
+	this.m_nodePool.Clear()
+	this.m_openList.Clear()
+
+	startNode := this.m_nodePool.GetNode(startRef, 0)
+	DtVcopy(startNode.Pos[:], startPos)
+	startNode.Pidx = 0
+	startNode.Cost = 0
+	startNode.Total = DtVdist(startPos, endPos) * H_SCALE
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_OPEN
+	this.m_openList.Push(startNode)
+
+	lastBestNode := startNode
+	lastBestNodeCost := startNode.Total
+
+	outOfNodes := false
+
+	for !this.m_openList.Empty() {
+		// Remove node from open list and put it in closed list.
+		bestNode := this.m_openList.Pop()
+		bestNode.Flags &= ^DT_NODE_OPEN
+		bestNode.Flags |= DT_NODE_CLOSED
+
+		// Reached the goal, stop searching.
+		if bestNode.Id == endRef {
+			lastBestNode = bestNode
+			break
+		}
+
+		// Get current poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		bestRef := bestNode.Id
+		var bestTile *DtMeshTile
+		var bestPoly *DtPoly
+		this.m_nav.GetTileAndPolyByRefUnsafe(bestRef, &bestTile, &bestPoly)
+
+		// Get parent poly and tile.
+		var parentRef DtPolyRef
+		var parentTile *DtMeshTile
+		var parentPoly *DtPoly
+		if bestNode.Pidx != 0 {
+			parentRef = this.m_nodePool.GetNodeAtIdx(bestNode.Pidx).Id
+		}
+		if parentRef != 0 {
+			this.m_nav.GetTileAndPolyByRefUnsafe(parentRef, &parentTile, &parentPoly)
+		}
+
+		for i := bestPoly.FirstLink; i != DT_NULL_LINK; i = bestTile.Links[i].Next {
+			neighbourRef := bestTile.Links[i].Ref
+
+			// Skip invalid ids and do not expand back to where we came from.
+			if neighbourRef == 0 || neighbourRef == parentRef {
+				continue
+			}
+			// Get neighbour poly and tile.
+			// The API input has been cheked already, skip checking internal data.
+			var neighbourTile *DtMeshTile
+			var neighbourPoly *DtPoly
+			this.m_nav.GetTileAndPolyByRefUnsafe(neighbourRef, &neighbourTile, &neighbourPoly)
+
+			if !filter.PassFilter(neighbourRef, neighbourTile, neighbourPoly) {
+				continue
+			}
+			// deal explicitly with crossing tile boundaries
+			var crossSide uint8
+			if bestTile.Links[i].Side != 0xff {
+				crossSide = (bestTile.Links[i].Side >> 1)
+			}
+			// get the node
+			neighbourNode := this.m_nodePool.GetNode(neighbourRef, crossSide)
+			if neighbourNode == nil {
+				outOfNodes = true
+				continue
+			}
+
+			// If the node is visited the first time, calculate node position.
+			if neighbourNode.Flags == 0 {
+				this.getEdgeMidPoint2(bestRef, bestPoly, bestTile,
+					neighbourRef, neighbourPoly, neighbourTile,
+					neighbourNode.Pos[:])
+			}
+
+			// Calculate cost and heuristic.
+			var cost float32
+			var heuristic float32
+
+			// Special case for last node.
+			if neighbourRef == endRef {
+				// Cost
+				curCost := filter.GetCost(bestNode.Pos[:], neighbourNode.Pos[:],
+					parentRef, parentTile, parentPoly,
+					bestRef, bestTile, bestPoly,
+					neighbourRef, neighbourTile, neighbourPoly)
+				endCost := filter.GetCost(neighbourNode.Pos[:], endPos,
+					bestRef, bestTile, bestPoly,
+					neighbourRef, neighbourTile, neighbourPoly,
+					0, nil, nil)
+
+				cost = bestNode.Cost + curCost + endCost
+				heuristic = 0
+			} else {
+				// Cost
+				curCost := filter.GetCost(bestNode.Pos[:], neighbourNode.Pos[:],
+					parentRef, parentTile, parentPoly,
+					bestRef, bestTile, bestPoly,
+					neighbourRef, neighbourTile, neighbourPoly)
+				cost = bestNode.Cost + curCost
+				heuristic = DtVdist(neighbourNode.Pos[:], endPos) * H_SCALE
+			}
+
+			total := cost + heuristic
+
+			// The node is already in open list and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			// The node is already visited and process, and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_CLOSED) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			// Add or update the node.
+			neighbourNode.Pidx = this.m_nodePool.GetNodeIdx(bestNode)
+			neighbourNode.Id = neighbourRef
+			neighbourNode.Flags = (neighbourNode.Flags & ^DT_NODE_CLOSED)
+			neighbourNode.Cost = cost
+			neighbourNode.Total = total
+
+			if (neighbourNode.Flags & DT_NODE_OPEN) != 0 {
+				// Already in open, update node location.
+				this.m_openList.Modify(neighbourNode)
+			} else {
+				// Put the node in open list.
+				neighbourNode.Flags |= DT_NODE_OPEN
+				this.m_openList.Push(neighbourNode)
+			}
+
+			// Update nearest node to target so far.
+			if heuristic < lastBestNodeCost {
+				lastBestNodeCost = heuristic
+				lastBestNode = neighbourNode
+			}
+		}
+	}
+
+	status := this.getPathToNode(lastBestNode, path, pathCount, maxPath)
+
+	if lastBestNode.Id != endRef {
+		status |= DT_PARTIAL_RESULT
+	}
+	if outOfNodes {
+		status |= DT_OUT_OF_NODES
+	}
+	return status
+}
+
+// Gets the path leading to the specified end node.
+func (this *DtNavMeshQuery) getPathToNode(endNode *DtNode, path []DtPolyRef, pathCount *int, maxPath int) DtStatus {
+	// Find the length of the entire path.
+	curNode := endNode
+	length := 0
+	for curNode != nil {
+		length++
+		curNode = this.m_nodePool.GetNodeAtIdx(curNode.Pidx)
+	}
+
+	// If the path cannot be fully stored then advance to the last node we will be able to store.
+	curNode = endNode
+	var writeCount int
+	for writeCount = length; writeCount > maxPath; writeCount-- {
+		DtAssert(curNode != nil)
+		curNode = this.m_nodePool.GetNodeAtIdx(curNode.Pidx)
+	}
+
+	// Write path
+	for i := writeCount - 1; i >= 0; i-- {
+		DtAssert(curNode != nil)
+		path[i] = curNode.Id
+		curNode = this.m_nodePool.GetNodeAtIdx(curNode.Pidx)
+	}
+
+	DtAssert(curNode == nil)
+
+	*pathCount = int(DtMinInt32(int32(length), int32(maxPath)))
+
+	if length > maxPath {
+		return DT_SUCCESS | DT_BUFFER_TOO_SMALL
+	}
+	return DT_SUCCESS
+}
+
+func (this *DtNavMeshQuery) getPortalPoints(from, to DtPolyRef, left, right []float32,
+	fromType, toType *DtPolyTypes) DtStatus {
+	DtAssert(this.m_nav != nil)
+
+	var fromTile *DtMeshTile
+	var fromPoly *DtPoly
+	if DtStatusFailed(this.m_nav.GetTileAndPolyByRef(from, &fromTile, &fromPoly)) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	*fromType = fromPoly.GetType()
+
+	var toTile *DtMeshTile
+	var toPoly *DtPoly
+	if DtStatusFailed(this.m_nav.GetTileAndPolyByRef(to, &toTile, &toPoly)) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	*toType = toPoly.GetType()
+
+	return this.getPortalPoints2(from, fromPoly, fromTile, to, toPoly, toTile, left, right)
 }
 
 // Returns portal points between two polygons.
@@ -1005,5 +1259,31 @@ func (this *DtNavMeshQuery) getPortalPoints2(from DtPolyRef, fromPoly *DtPoly, f
 		}
 	}
 
+	return DT_SUCCESS
+}
+
+// Returns edge mid point between two polygons.
+func (this *DtNavMeshQuery) getEdgeMidPoint(from, to DtPolyRef, mid []float32) DtStatus {
+	var left, right [3]float32
+	var fromType, toType DtPolyTypes
+	if DtStatusFailed(this.getPortalPoints(from, to, left[:], right[:], &fromType, &toType)) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	mid[0] = (left[0] + right[0]) * 0.5
+	mid[1] = (left[1] + right[1]) * 0.5
+	mid[2] = (left[2] + right[2]) * 0.5
+	return DT_SUCCESS
+}
+
+func (this *DtNavMeshQuery) getEdgeMidPoint2(from DtPolyRef, fromPoly *DtPoly, fromTile *DtMeshTile,
+	to DtPolyRef, toPoly *DtPoly, toTile *DtMeshTile,
+	mid []float32) DtStatus {
+	var left, right [3]float32
+	if DtStatusFailed(this.getPortalPoints2(from, fromPoly, fromTile, to, toPoly, toTile, left[:], right[:])) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	mid[0] = (left[0] + right[0]) * 0.5
+	mid[1] = (left[1] + right[1]) * 0.5
+	mid[2] = (left[2] + right[2]) * 0.5
 	return DT_SUCCESS
 }
