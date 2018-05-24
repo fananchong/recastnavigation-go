@@ -68,7 +68,7 @@ type DtRaycastHit struct {
 	HitEdgeIndex int32
 
 	/// Pointer to an array of reference ids of the visited polygons. [opt]
-	Path *DtPolyRef
+	Path []DtPolyRef
 
 	/// The number of visited polygons. [opt]
 	PathCount int32
@@ -98,7 +98,7 @@ type dtQueryData struct {
 	startPos         [3]float32
 	endPos           [3]float32
 	filter           *DtQueryFilter
-	options          int32
+	options          DtFindPathOptions
 	raycastLimitSqr  float32
 }
 

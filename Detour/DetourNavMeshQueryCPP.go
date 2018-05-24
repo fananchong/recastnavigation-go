@@ -1178,6 +1178,471 @@ func (this *DtNavMeshQuery) getPathToNode(endNode *DtNode, path []DtPolyRef, pat
 	return DT_SUCCESS
 }
 
+/// Intializes a sliced path query.
+///  @param[in]		startRef	The refrence id of the start polygon.
+///  @param[in]		endRef		The reference id of the end polygon.
+///  @param[in]		startPos	A position within the start polygon. [(x, y, z)]
+///  @param[in]		endPos		A position within the end polygon. [(x, y, z)]
+///  @param[in]		filter		The polygon filter to apply to the query.
+///  @param[in]		options		query options (see: #dtFindPathOptions)
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) InitSlicedFindPath(startRef, endRef DtPolyRef,
+	startPos, endPos []float32,
+	filter *DtQueryFilter, options DtFindPathOptions) DtStatus {
+	/// @par
+	///
+	/// @warning Calling any non-slice methods before calling finalizeSlicedFindPath()
+	/// or finalizeSlicedFindPathPartial() may result in corrupted data!
+	///
+	/// The @p filter pointer is stored and used for the duration of the sliced
+	/// path query.
+	///
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_nodePool != nil)
+	DtAssert(this.m_openList != nil)
+
+	// Init path state.
+	this.m_query = dtQueryData{}
+	this.m_query.status = DT_FAILURE
+	this.m_query.startRef = startRef
+	this.m_query.endRef = endRef
+	DtVcopy(this.m_query.startPos[:], startPos)
+	DtVcopy(this.m_query.endPos[:], endPos)
+	this.m_query.filter = filter
+	this.m_query.options = options
+	this.m_query.raycastLimitSqr = float32(math.MaxFloat32)
+
+	if startRef == 0 || endRef == 0 {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	// Validate input
+	if !this.m_nav.IsValidPolyRef(startRef) || !this.m_nav.IsValidPolyRef(endRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	// trade quality with performance?
+	if (options & DT_FINDPATH_ANY_ANGLE) != 0 {
+		// limiting to several times the character radius yields nice results. It is not sensitive
+		// so it is enough to compute it from the first tile.
+		tile := this.m_nav.GetTileByRef(DtTileRef(startRef))
+		agentRadius := tile.Header.WalkableRadius
+		this.m_query.raycastLimitSqr = DtSqrFloat32(agentRadius * DT_RAY_CAST_LIMIT_PROPORTIONS)
+	}
+
+	if startRef == endRef {
+		this.m_query.status = DT_SUCCESS
+		return DT_SUCCESS
+	}
+
+	this.m_nodePool.Clear()
+	this.m_openList.Clear()
+
+	startNode := this.m_nodePool.GetNode(startRef, 0)
+	DtVcopy(startNode.Pos[:], startPos)
+	startNode.Pidx = 0
+	startNode.Cost = 0
+	startNode.Total = DtVdist(startPos, endPos) * H_SCALE
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_OPEN
+	this.m_openList.Push(startNode)
+
+	this.m_query.status = DT_IN_PROGRESS
+	this.m_query.lastBestNode = startNode
+	this.m_query.lastBestNodeCost = startNode.Total
+
+	return this.m_query.status
+}
+
+/// Updates an in-progress sliced path query.
+///  @param[in]		maxIter		The maximum number of iterations to perform.
+///  @param[out]	doneIters	The actual number of iterations completed. [opt]
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) UpdateSlicedFindPath(maxIter int, doneIters *int) DtStatus {
+	if !DtStatusInProgress(this.m_query.status) {
+		return this.m_query.status
+	}
+	// Make sure the request is still valid.
+	if !this.m_nav.IsValidPolyRef(this.m_query.startRef) || !this.m_nav.IsValidPolyRef(this.m_query.endRef) {
+		this.m_query.status = DT_FAILURE
+		return DT_FAILURE
+	}
+
+	rayHit := DtRaycastHit{}
+	rayHit.MaxPath = 0
+
+	iter := 0
+	for iter < maxIter && !this.m_openList.Empty() {
+		iter++
+
+		// Remove node from open list and put it in closed list.
+		bestNode := this.m_openList.Pop()
+		bestNode.Flags &= ^DT_NODE_OPEN
+		bestNode.Flags |= DT_NODE_CLOSED
+
+		// Reached the goal, stop searching.
+		if bestNode.Id == this.m_query.endRef {
+			this.m_query.lastBestNode = bestNode
+			details := this.m_query.status & DT_STATUS_DETAIL_MASK
+			this.m_query.status = DT_SUCCESS | details
+			if doneIters != nil {
+				*doneIters = iter
+			}
+			return this.m_query.status
+		}
+
+		// Get current poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		bestRef := bestNode.Id
+		var bestTile *DtMeshTile
+		var bestPoly *DtPoly
+		if DtStatusFailed(this.m_nav.GetTileAndPolyByRef(bestRef, &bestTile, &bestPoly)) {
+			// The polygon has disappeared during the sliced query, fail.
+			this.m_query.status = DT_FAILURE
+			if doneIters != nil {
+				*doneIters = iter
+			}
+			return this.m_query.status
+		}
+
+		// Get parent and grand parent poly and tile.
+		var parentRef, grandpaRef DtPolyRef
+		var parentTile *DtMeshTile
+		var parentPoly *DtPoly
+		var parentNode *DtNode
+		if bestNode.Pidx != 0 {
+			parentNode = this.m_nodePool.GetNodeAtIdx(bestNode.Pidx)
+			parentRef = parentNode.Id
+			if parentNode.Pidx != 0 {
+				grandpaRef = this.m_nodePool.GetNodeAtIdx(parentNode.Pidx).Id
+			}
+		}
+		if parentRef != 0 {
+			invalidParent := DtStatusFailed(this.m_nav.GetTileAndPolyByRef(parentRef, &parentTile, &parentPoly))
+			if invalidParent || (grandpaRef != 0 && !this.m_nav.IsValidPolyRef(grandpaRef)) {
+				// The polygon has disappeared during the sliced query, fail.
+				this.m_query.status = DT_FAILURE
+				if doneIters != nil {
+					*doneIters = iter
+				}
+				return this.m_query.status
+			}
+		}
+
+		// decide whether to test raycast to previous nodes
+		tryLOS := false
+		if (this.m_query.options & DT_FINDPATH_ANY_ANGLE) != 0 {
+			if (parentRef != 0) && (DtVdistSqr(parentNode.Pos[:], bestNode.Pos[:]) < this.m_query.raycastLimitSqr) {
+				tryLOS = true
+			}
+		}
+
+		for i := bestPoly.FirstLink; i != DT_NULL_LINK; i = bestTile.Links[i].Next {
+			neighbourRef := bestTile.Links[i].Ref
+
+			// Skip invalid ids and do not expand back to where we came from.
+			if neighbourRef == 0 || neighbourRef == parentRef {
+				continue
+			}
+			// Get neighbour poly and tile.
+			// The API input has been cheked already, skip checking internal data.
+			var neighbourTile *DtMeshTile
+			var neighbourPoly *DtPoly
+			this.m_nav.GetTileAndPolyByRefUnsafe(neighbourRef, &neighbourTile, &neighbourPoly)
+
+			if !this.m_query.filter.PassFilter(neighbourRef, neighbourTile, neighbourPoly) {
+				continue
+			}
+			// get the neighbor node
+			neighbourNode := this.m_nodePool.GetNode(neighbourRef, 0)
+			if neighbourNode == nil {
+				this.m_query.status |= DT_OUT_OF_NODES
+				continue
+			}
+
+			// do not expand to nodes that were already visited from the same parent
+			if neighbourNode.Pidx != 0 && neighbourNode.Pidx == bestNode.Pidx {
+				continue
+			}
+			// If the node is visited the first time, calculate node position.
+			if neighbourNode.Flags == 0 {
+				this.getEdgeMidPoint2(bestRef, bestPoly, bestTile,
+					neighbourRef, neighbourPoly, neighbourTile,
+					neighbourNode.Pos[:])
+			}
+
+			// Calculate cost and heuristic.
+			var cost float32
+			var heuristic float32
+
+			// raycast parent
+			foundShortCut := false
+			rayHit.PathCost = 0
+			rayHit.T = 0
+			if tryLOS {
+				this.Raycast2(parentRef, parentNode.Pos[:], neighbourNode.Pos[:], this.m_query.filter, DT_RAYCAST_USE_COSTS, &rayHit, grandpaRef)
+				foundShortCut = (rayHit.T >= 1.0)
+			}
+
+			// update move cost
+			if foundShortCut {
+				// shortcut found using raycast. Using shorter cost instead
+				cost = parentNode.Cost + rayHit.PathCost
+			} else {
+				// No shortcut found.
+				curCost := this.m_query.filter.GetCost(bestNode.Pos[:], neighbourNode.Pos[:],
+					parentRef, parentTile, parentPoly,
+					bestRef, bestTile, bestPoly,
+					neighbourRef, neighbourTile, neighbourPoly)
+				cost = bestNode.Cost + curCost
+			}
+
+			// Special case for last node.
+			if neighbourRef == this.m_query.endRef {
+				endCost := this.m_query.filter.GetCost(neighbourNode.Pos[:], this.m_query.endPos[:],
+					bestRef, bestTile, bestPoly,
+					neighbourRef, neighbourTile, neighbourPoly,
+					0, nil, nil)
+
+				cost = cost + endCost
+				heuristic = 0
+			} else {
+				heuristic = DtVdist(neighbourNode.Pos[:], this.m_query.endPos[:]) * H_SCALE
+			}
+
+			total := cost + heuristic
+
+			// The node is already in open list and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			// The node is already visited and process, and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_CLOSED) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			// Add or update the node.
+			if foundShortCut {
+				neighbourNode.Pidx = bestNode.Pidx
+			} else {
+				neighbourNode.Pidx = this.m_nodePool.GetNodeIdx(bestNode)
+			}
+			neighbourNode.Id = neighbourRef
+			neighbourNode.Flags = (neighbourNode.Flags & ^(DT_NODE_CLOSED | DT_NODE_PARENT_DETACHED))
+			neighbourNode.Cost = cost
+			neighbourNode.Total = total
+			if foundShortCut {
+				neighbourNode.Flags = (neighbourNode.Flags | DT_NODE_PARENT_DETACHED)
+			}
+			if (neighbourNode.Flags & DT_NODE_OPEN) != 0 {
+				// Already in open, update node location.
+				this.m_openList.Modify(neighbourNode)
+			} else {
+				// Put the node in open list.
+				neighbourNode.Flags |= DT_NODE_OPEN
+				this.m_openList.Push(neighbourNode)
+			}
+
+			// Update nearest node to target so far.
+			if heuristic < this.m_query.lastBestNodeCost {
+				this.m_query.lastBestNodeCost = heuristic
+				this.m_query.lastBestNode = neighbourNode
+			}
+		}
+	}
+
+	// Exhausted all nodes, but could not find path.
+	if this.m_openList.Empty() {
+		details := this.m_query.status & DT_STATUS_DETAIL_MASK
+		this.m_query.status = DT_SUCCESS | details
+	}
+
+	if doneIters != nil {
+		*doneIters = iter
+	}
+
+	return this.m_query.status
+}
+
+/// Finalizes and returns the results of a sliced path query.
+///  @param[out]	path		An ordered list of polygon references representing the path. (Start to end.)
+///  							[(polyRef) * @p pathCount]
+///  @param[out]	pathCount	The number of polygons returned in the @p path array.
+///  @param[in]		maxPath		The max number of polygons the path array can hold. [Limit: >= 1]
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) FinalizeSlicedFindPath(path []DtPolyRef, pathCount *int, maxPath int) DtStatus {
+	*pathCount = 0
+
+	if DtStatusFailed(this.m_query.status) {
+		// Reset query.
+		this.m_query = dtQueryData{}
+		return DT_FAILURE
+	}
+
+	n := 0
+
+	if this.m_query.startRef == this.m_query.endRef {
+		// Special case: the search starts and ends at same poly.
+		path[n] = this.m_query.startRef
+		n++
+	} else {
+		// Reverse the path.
+		DtAssert(this.m_query.lastBestNode != nil)
+
+		if this.m_query.lastBestNode.Id != this.m_query.endRef {
+			this.m_query.status |= DT_PARTIAL_RESULT
+		}
+
+		var prev *DtNode
+		node := this.m_query.lastBestNode
+		var prevRay DtNodeFlags
+		for node != nil {
+			next := this.m_nodePool.GetNodeAtIdx(node.Pidx)
+			node.Pidx = this.m_nodePool.GetNodeIdx(prev)
+			prev = node
+			nextRay := node.Flags & DT_NODE_PARENT_DETACHED                // keep track of whether parent is not adjacent (i.e. due to raycast shortcut)
+			node.Flags = (node.Flags & ^DT_NODE_PARENT_DETACHED) | prevRay // and store it in the reversed path's node
+			prevRay = nextRay
+			node = next
+		}
+
+		// Store path
+		node = prev
+		for node != nil {
+			next := this.m_nodePool.GetNodeAtIdx(node.Pidx)
+			var status DtStatus
+			if (node.Flags & DT_NODE_PARENT_DETACHED) != 0 {
+				var t float32
+				var normal [3]float32
+				var m int
+				status = this.Raycast(node.Id, node.Pos[:], next.Pos[:], this.m_query.filter, &t, normal[:], path[n:], &m, maxPath-n)
+				n += m
+				// raycast ends on poly boundary and the path might include the next poly boundary.
+				if path[n-1] == next.Id {
+					n-- // remove to avoid duplicates
+				}
+			} else {
+				path[n] = node.Id
+				n++
+				if n >= maxPath {
+					status = DT_BUFFER_TOO_SMALL
+				}
+			}
+
+			if (status & DT_STATUS_DETAIL_MASK) != 0 {
+				this.m_query.status |= status & DT_STATUS_DETAIL_MASK
+				break
+			}
+			node = next
+		}
+	}
+
+	details := this.m_query.status & DT_STATUS_DETAIL_MASK
+
+	// Reset query.
+	this.m_query = dtQueryData{}
+	*pathCount = n
+
+	return DT_SUCCESS | details
+}
+
+/// Finalizes and returns the results of an incomplete sliced path query, returning the path to the furthest
+/// polygon on the existing path that was visited during the search.
+///  @param[in]		existing		An array of polygon references for the existing path.
+///  @param[in]		existingSize	The number of polygon in the @p existing array.
+///  @param[out]	path			An ordered list of polygon references representing the path. (Start to end.)
+///  								[(polyRef) * @p pathCount]
+///  @param[out]	pathCount		The number of polygons returned in the @p path array.
+///  @param[in]		maxPath			The max number of polygons the @p path array can hold. [Limit: >= 1]
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) FinalizeSlicedFindPathPartial(existing []DtPolyRef, existingSize int,
+	path []DtPolyRef, pathCount *int, maxPath int) DtStatus {
+	*pathCount = 0
+
+	if existingSize == 0 {
+		return DT_FAILURE
+	}
+
+	if DtStatusFailed(this.m_query.status) {
+		// Reset query.
+		this.m_query = dtQueryData{}
+		return DT_FAILURE
+	}
+
+	n := 0
+
+	if this.m_query.startRef == this.m_query.endRef {
+		// Special case: the search starts and ends at same poly.
+		path[n] = this.m_query.startRef
+		n++
+	} else {
+		// Find furthest existing node that was visited.
+		var prev *DtNode
+		var node *DtNode
+		for i := existingSize - 1; i >= 0; i-- {
+			var tempNode [1]*DtNode
+			bFind := this.m_nodePool.FindNodes(existing[i], tempNode[:], 1)
+			if bFind > 0 {
+				node = tempNode[0]
+				break
+			}
+		}
+
+		if node == nil {
+			this.m_query.status |= DT_PARTIAL_RESULT
+			DtAssert(this.m_query.lastBestNode != nil)
+			node = this.m_query.lastBestNode
+		}
+
+		// Reverse the path.
+		var prevRay DtNodeFlags
+		for node != nil {
+			next := this.m_nodePool.GetNodeAtIdx(node.Pidx)
+			node.Pidx = this.m_nodePool.GetNodeIdx(prev)
+			prev = node
+			nextRay := node.Flags & DT_NODE_PARENT_DETACHED                // keep track of whether parent is not adjacent (i.e. due to raycast shortcut)
+			node.Flags = (node.Flags & ^DT_NODE_PARENT_DETACHED) | prevRay // and store it in the reversed path's node
+			prevRay = nextRay
+			node = next
+		}
+
+		// Store path
+		node = prev
+		for node != nil {
+			next := this.m_nodePool.GetNodeAtIdx(node.Pidx)
+			var status DtStatus
+			if (node.Flags & DT_NODE_PARENT_DETACHED) != 0 {
+				var t float32
+				var normal [3]float32
+				var m int
+				status = this.Raycast(node.Id, node.Pos[:], next.Pos[:], this.m_query.filter, &t, normal[:], path[n:], &m, maxPath-n)
+				n += m
+				// raycast ends on poly boundary and the path might include the next poly boundary.
+				if path[n-1] == next.Id {
+					n-- // remove to avoid duplicates
+				}
+			} else {
+				path[n] = node.Id
+				n++
+				if n >= maxPath {
+					status = DT_BUFFER_TOO_SMALL
+				}
+			}
+
+			if (status & DT_STATUS_DETAIL_MASK) != 0 {
+				this.m_query.status |= status & DT_STATUS_DETAIL_MASK
+				break
+			}
+			node = next
+		}
+	}
+
+	details := this.m_query.status & DT_STATUS_DETAIL_MASK
+
+	// Reset query.
+	this.m_query = dtQueryData{}
+	*pathCount = n
+
+	return DT_SUCCESS | details
+}
+
 func (this *DtNavMeshQuery) getPortalPoints(from, to DtPolyRef, left, right []float32,
 	fromType, toType *DtPolyTypes) DtStatus {
 	DtAssert(this.m_nav != nil)
@@ -1286,4 +1751,346 @@ func (this *DtNavMeshQuery) getEdgeMidPoint2(from DtPolyRef, fromPoly *DtPoly, f
 	mid[1] = (left[1] + right[1]) * 0.5
 	mid[2] = (left[2] + right[2]) * 0.5
 	return DT_SUCCESS
+}
+
+/// Casts a 'walkability' ray along the surface of the navigation mesh from
+/// the start position toward the end position.
+/// @note A wrapper around raycast(..., RaycastHit*). Retained for backward compatibility.
+///  @param[in]		startRef	The reference id of the start polygon.
+///  @param[in]		startPos	A position within the start polygon representing
+///  							the start of the ray. [(x, y, z)]
+///  @param[in]		endPos		The position to cast the ray toward. [(x, y, z)]
+///  @param[out]	t			The hit parameter. (FLT_MAX if no wall hit.)
+///  @param[out]	hitNormal	The normal of the nearest wall hit. [(x, y, z)]
+///  @param[in]		filter		The polygon filter to apply to the query.
+///  @param[out]	path		The reference ids of the visited polygons. [opt]
+///  @param[out]	pathCount	The number of visited polygons. [opt]
+///  @param[in]		maxPath		The maximum number of polygons the @p path array can hold.
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) Raycast(startRef DtPolyRef, startPos, endPos []float32,
+	filter *DtQueryFilter,
+	t *float32, hitNormal []float32, path []DtPolyRef, pathCount *int, maxPath int) DtStatus {
+	/// @par
+	///
+	/// This method is meant to be used for quick, short distance checks.
+	///
+	/// If the path array is too small to hold the result, it will be filled as
+	/// far as possible from the start postion toward the end position.
+	///
+	/// <b>Using the Hit Parameter (t)</b>
+	///
+	/// If the hit parameter is a very high value (FLT_MAX), then the ray has hit
+	/// the end position. In this case the path represents a valid corridor to the
+	/// end position and the value of @p hitNormal is undefined.
+	///
+	/// If the hit parameter is zero, then the start position is on the wall that
+	/// was hit and the value of @p hitNormal is undefined.
+	///
+	/// If 0 < t < 1.0 then the following applies:
+	///
+	/// @code
+	/// distanceToHitBorder = distanceToEndPosition * t
+	/// hitPoint = startPos + (endPos - startPos) * t
+	/// @endcode
+	///
+	/// <b>Use Case Restriction</b>
+	///
+	/// The raycast ignores the y-value of the end position. (2D check.) This
+	/// places significant limits on how it can be used. For example:
+	///
+	/// Consider a scene where there is a main floor with a second floor balcony
+	/// that hangs over the main floor. So the first floor mesh extends below the
+	/// balcony mesh. The start position is somewhere on the first floor. The end
+	/// position is on the balcony.
+	///
+	/// The raycast will search toward the end position along the first floor mesh.
+	/// If it reaches the end position's xz-coordinates it will indicate FLT_MAX
+	/// (no wall hit), meaning it reached the end position. This is one example of why
+	/// this method is meant for short distance checks.
+	///
+	var hit DtRaycastHit
+	hit.Path = path
+	hit.MaxPath = int32(maxPath)
+
+	status := this.Raycast2(startRef, startPos, endPos, filter, 0, &hit, 0)
+
+	*t = hit.T
+	if hitNormal != nil {
+		DtVcopy(hitNormal, hit.HitNormal[:])
+	}
+	if pathCount != nil {
+		*pathCount = int(hit.PathCount)
+	}
+	return status
+}
+
+/// Casts a 'walkability' ray along the surface of the navigation mesh from
+/// the start position toward the end position.
+///  @param[in]		startRef	The reference id of the start polygon.
+///  @param[in]		startPos	A position within the start polygon representing
+///  							the start of the ray. [(x, y, z)]
+///  @param[in]		endPos		The position to cast the ray toward. [(x, y, z)]
+///  @param[in]		filter		The polygon filter to apply to the query.
+///  @param[in]		flags		govern how the raycast behaves. See dtRaycastOptions
+///  @param[out]	hit			Pointer to a raycast hit structure which will be filled by the results.
+///  @param[in]		prevRef		parent of start ref. Used during for cost calculation [opt]
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) Raycast2(startRef DtPolyRef, startPos, endPos []float32,
+	filter *DtQueryFilter, options DtRaycastOptions,
+	hit *DtRaycastHit, prevRef DtPolyRef) DtStatus {
+	/// @par
+	///
+	/// This method is meant to be used for quick, short distance checks.
+	///
+	/// If the path array is too small to hold the result, it will be filled as
+	/// far as possible from the start postion toward the end position.
+	///
+	/// <b>Using the Hit Parameter t of RaycastHit</b>
+	///
+	/// If the hit parameter is a very high value (FLT_MAX), then the ray has hit
+	/// the end position. In this case the path represents a valid corridor to the
+	/// end position and the value of @p hitNormal is undefined.
+	///
+	/// If the hit parameter is zero, then the start position is on the wall that
+	/// was hit and the value of @p hitNormal is undefined.
+	///
+	/// If 0 < t < 1.0 then the following applies:
+	///
+	/// @code
+	/// distanceToHitBorder = distanceToEndPosition * t
+	/// hitPoint = startPos + (endPos - startPos) * t
+	/// @endcode
+	///
+	/// <b>Use Case Restriction</b>
+	///
+	/// The raycast ignores the y-value of the end position. (2D check.) This
+	/// places significant limits on how it can be used. For example:
+	///
+	/// Consider a scene where there is a main floor with a second floor balcony
+	/// that hangs over the main floor. So the first floor mesh extends below the
+	/// balcony mesh. The start position is somewhere on the first floor. The end
+	/// position is on the balcony.
+	///
+	/// The raycast will search toward the end position along the first floor mesh.
+	/// If it reaches the end position's xz-coordinates it will indicate FLT_MAX
+	/// (no wall hit), meaning it reached the end position. This is one example of why
+	/// this method is meant for short distance checks.
+	///
+	DtAssert(this.m_nav != nil)
+
+	hit.T = 0
+	hit.PathCount = 0
+	hit.PathCost = 0
+
+	// Validate input
+	if startRef == 0 || !this.m_nav.IsValidPolyRef(startRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if prevRef != 0 && !this.m_nav.IsValidPolyRef(prevRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	var dir, curPos, lastPos [3]float32
+	var verts [DT_VERTS_PER_POLYGON*3 + 3]float32
+	n := 0
+
+	DtVcopy(curPos[:], startPos)
+	DtVsub(dir[:], endPos, startPos)
+	DtVset(hit.HitNormal[:], 0, 0, 0)
+
+	status := DT_SUCCESS
+
+	var prevTile, tile, nextTile *DtMeshTile
+	var prevPoly, poly, nextPoly *DtPoly
+	var curRef DtPolyRef
+
+	// The API input has been checked already, skip checking internal data.
+	curRef = startRef
+	tile = nil
+	poly = nil
+	this.m_nav.GetTileAndPolyByRefUnsafe(curRef, &tile, &poly)
+	nextTile = tile
+	prevTile = tile
+	nextPoly = poly
+	prevPoly = poly
+	if prevRef != 0 {
+		this.m_nav.GetTileAndPolyByRefUnsafe(prevRef, &prevTile, &prevPoly)
+	}
+	for curRef != 0 {
+		// Cast ray against current polygon.
+
+		// Collect vertices.
+		nv := 0
+		for i := 0; i < (int)(poly.VertCount); i++ {
+			DtVcopy(verts[nv*3:], tile.Verts[poly.Verts[i]*3:])
+			nv++
+		}
+
+		var tmin, tmax float32
+		var segMin, segMax int
+		if !DtIntersectSegmentPoly2D(startPos, endPos, verts[:], nv, &tmin, &tmax, &segMin, &segMax) {
+			// Could not hit the polygon, keep the old t and report hit.
+			hit.PathCount = int32(n)
+			return status
+		}
+
+		hit.HitEdgeIndex = int32(segMax)
+
+		// Keep track of furthest t so far.
+		if tmax > hit.T {
+			hit.T = tmax
+		}
+		// Store visited polygons.
+		if n < int(hit.MaxPath) {
+			hit.Path[n] = curRef
+			n++
+		} else {
+			status |= DT_BUFFER_TOO_SMALL
+		}
+		// Ray end is completely inside the polygon.
+		if segMax == -1 {
+			hit.T = float32(math.MaxFloat32)
+			hit.PathCount = int32(n)
+
+			// add the cost
+			if (options & DT_RAYCAST_USE_COSTS) != 0 {
+				hit.PathCost += filter.GetCost(curPos[:], endPos, prevRef, prevTile, prevPoly, curRef, tile, poly, curRef, tile, poly)
+			}
+			return status
+		}
+
+		// Follow neighbours.
+		var nextRef DtPolyRef
+
+		for i := poly.FirstLink; i != DT_NULL_LINK; i = tile.Links[i].Next {
+			link := &tile.Links[i]
+
+			// Find link which contains this edge.
+			if (int)(link.Edge) != segMax {
+				continue
+			}
+			// Get pointer to the next polygon.
+			nextTile = nil
+			nextPoly = nil
+			this.m_nav.GetTileAndPolyByRefUnsafe(link.Ref, &nextTile, &nextPoly)
+
+			// Skip off-mesh connections.
+			if nextPoly.GetType() == DT_POLYTYPE_OFFMESH_CONNECTION {
+				continue
+			}
+			// Skip links based on filter.
+			if !filter.PassFilter(link.Ref, nextTile, nextPoly) {
+				continue
+			}
+			// If the link is internal, just return the ref.
+			if link.Side == 0xff {
+				nextRef = link.Ref
+				break
+			}
+
+			// If the link is at tile boundary,
+
+			// Check if the link spans the whole edge, and accept.
+			if link.Bmin == 0 && link.Bmax == 255 {
+				nextRef = link.Ref
+				break
+			}
+
+			// Check for partial edge links.
+			v0 := poly.Verts[link.Edge]
+			v1 := poly.Verts[(link.Edge+1)%poly.VertCount]
+			left := tile.Verts[v0*3:]
+			right := tile.Verts[v1*3:]
+
+			// Check that the intersection lies inside the link portal.
+			if link.Side == 0 || link.Side == 4 {
+				// Calculate link size.
+				s := float32(1.0 / 255.0)
+				lmin := left[2] + (right[2]-left[2])*(float32(link.Bmin)*s)
+				lmax := left[2] + (right[2]-left[2])*(float32(link.Bmax)*s)
+				if lmin > lmax {
+					DtSwapFloat32(&lmin, &lmax)
+				}
+
+				// Find Z intersection.
+				z := startPos[2] + (endPos[2]-startPos[2])*tmax
+				if z >= lmin && z <= lmax {
+					nextRef = link.Ref
+					break
+				}
+			} else if link.Side == 2 || link.Side == 6 {
+				// Calculate link size.
+				s := float32(1.0 / 255.0)
+				lmin := left[0] + (right[0]-left[0])*(float32(link.Bmin)*s)
+				lmax := left[0] + (right[0]-left[0])*(float32(link.Bmax)*s)
+				if lmin > lmax {
+					DtSwapFloat32(&lmin, &lmax)
+				}
+
+				// Find X intersection.
+				x := startPos[0] + (endPos[0]-startPos[0])*tmax
+				if x >= lmin && x <= lmax {
+					nextRef = link.Ref
+					break
+				}
+			}
+		}
+
+		// add the cost
+		if (options & DT_RAYCAST_USE_COSTS) != 0 {
+			// compute the intersection point at the furthest end of the polygon
+			// and correct the height (since the raycast moves in 2d)
+			DtVcopy(lastPos[:], curPos[:])
+			DtVmad(curPos[:], startPos, dir[:], hit.T)
+			e1 := verts[segMax*3:]
+			e2 := verts[((segMax+1)%nv)*3:]
+			var eDir, diff [3]float32
+			DtVsub(eDir[:], e2, e1)
+			DtVsub(diff[:], curPos[:], e1)
+			var s float32
+			if DtSqrFloat32(eDir[0]) > DtSqrFloat32(eDir[2]) {
+				s = diff[0] / eDir[0]
+			} else {
+				s = diff[2] / eDir[2]
+			}
+			curPos[1] = e1[1] + eDir[1]*s
+
+			hit.PathCost += filter.GetCost(lastPos[:], curPos[:], prevRef, prevTile, prevPoly, curRef, tile, poly, nextRef, nextTile, nextPoly)
+		}
+
+		if nextRef == 0 {
+			// No neighbour, we hit a wall.
+
+			// Calculate hit normal.
+			a := segMax
+			var b int
+			if segMax+1 < nv {
+				b = segMax + 1
+			} else {
+				b = 0
+			}
+			va := verts[a*3:]
+			vb := verts[b*3:]
+			dx := vb[0] - va[0]
+			dz := vb[2] - va[2]
+			hit.HitNormal[0] = dz
+			hit.HitNormal[1] = 0
+			hit.HitNormal[2] = -dx
+			DtVnormalize(hit.HitNormal[:])
+
+			hit.PathCount = int32(n)
+			return status
+		}
+
+		// No hit, advance to neighbour polygon.
+		prevRef = curRef
+		curRef = nextRef
+		prevTile = tile
+		tile = nextTile
+		prevPoly = poly
+		poly = nextPoly
+	}
+
+	hit.PathCount = int32(n)
+
+	return status
 }
