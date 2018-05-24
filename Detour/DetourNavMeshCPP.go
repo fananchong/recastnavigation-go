@@ -197,7 +197,7 @@ func (this *DtNavMesh) Init(params *DtNavMeshParams) DtStatus {
 ///  @see dtCreateNavMeshData
 func (this *DtNavMesh) Init2(data []byte, dataSize int, flags DtTileFlags) DtStatus {
 	// Make sure the data is in right format.
-	if dataSize < int(unsafe.Sizeof(DtMeshHeader{})) {
+	if dataSize < DtAlign4(int(unsafe.Sizeof(DtMeshHeader{}))) {
 		return DT_FAILURE | DT_INVALID_PARAM
 	}
 	header := (*DtMeshHeader)(unsafe.Pointer(&(data[0])))
@@ -791,7 +791,7 @@ func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags, las
 	/// @see dtCreateNavMeshData, #removeTile
 
 	// Make sure the data is in right format.
-	if dataSize < int(unsafe.Sizeof(DtMeshHeader{})) {
+	if dataSize < DtAlign4(int(unsafe.Sizeof(DtMeshHeader{}))) {
 		return DT_FAILURE | DT_INVALID_PARAM
 	}
 	header := (*DtMeshHeader)(unsafe.Pointer(&(data[0])))
