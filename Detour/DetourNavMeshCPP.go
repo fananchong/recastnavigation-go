@@ -1,8 +1,6 @@
 package detour
 
 import (
-	"bytes"
-	"encoding/binary"
 	"math"
 	"reflect"
 	"unsafe"
@@ -199,11 +197,10 @@ func (this *DtNavMesh) Init(params *DtNavMeshParams) DtStatus {
 ///  @see dtCreateNavMeshData
 func (this *DtNavMesh) Init2(data []byte, dataSize int, flags DtTileFlags) DtStatus {
 	// Make sure the data is in right format.
-	reader := bytes.NewReader(data)
-	header := &DtMeshHeader{}
-	if err := binary.Read(reader, binary.LittleEndian, header); err != nil {
+	if dataSize < int(unsafe.Sizeof(DtMeshHeader{})) {
 		return DT_FAILURE | DT_INVALID_PARAM
 	}
+	header := (*DtMeshHeader)(unsafe.Pointer(&(data[0])))
 	if header.Magic != DT_NAVMESH_MAGIC {
 		return DT_FAILURE | DT_WRONG_MAGIC
 	}
@@ -794,12 +791,10 @@ func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags, las
 	/// @see dtCreateNavMeshData, #removeTile
 
 	// Make sure the data is in right format.
-	reader := bytes.NewReader(data)
-	header := &DtMeshHeader{}
-	if err := binary.Read(reader, binary.LittleEndian, header); err != nil {
+	if dataSize < int(unsafe.Sizeof(DtMeshHeader{})) {
 		return DT_FAILURE | DT_INVALID_PARAM
 	}
-
+	header := (*DtMeshHeader)(unsafe.Pointer(&(data[0])))
 	if header.Magic != DT_NAVMESH_MAGIC {
 		return DT_FAILURE | DT_WRONG_MAGIC
 	}
