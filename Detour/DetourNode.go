@@ -32,6 +32,8 @@ type DtNode struct {
 
 const DT_MAX_STATES_PER_NODE int = 1 << DT_NODE_STATE_BITS // number of extra states per node. See dtNode::state
 
+var sizeofNode = uint32(unsafe.Sizeof(DtNode{}))
+
 type DtNodePool struct {
 	m_nodes     []DtNode
 	m_first     []DtNodeIndex
@@ -48,7 +50,7 @@ func (this *DtNodePool) GetNodeIdx(node *DtNode) uint32 {
 		return 0
 	}
 	current := uintptr(unsafe.Pointer(node))
-	return (uint32)((current-this.base)/unsafe.Sizeof(*node)) + 1
+	return (uint32)(current-this.base)/sizeofNode + 1
 }
 
 func (this *DtNodePool) GetNodeAtIdx(idx uint32) *DtNode {

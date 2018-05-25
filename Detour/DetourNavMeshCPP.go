@@ -6,6 +6,9 @@ import (
 	"unsafe"
 )
 
+var sizeofMeshTile uint32 = (uint32)(unsafe.Sizeof(DtMeshTile{}))
+var sizeofPoly uint32 = (uint32)(unsafe.Sizeof(DtPoly{}))
+
 func overlapSlabs(amin, amax, bmin, bmax []float32, px, py float32) bool {
 	// Check for horizontal overlap.
 	// The segment is shrunken a little so that slabs which touch
@@ -586,7 +589,7 @@ func (this *DtNavMesh) closestPointOnPoly(ref DtPolyRef, pos, closest []float32,
 
 	polysBase := uintptr(unsafe.Pointer(&(tile.Polys[0])))
 	current := uintptr(unsafe.Pointer(poly))
-	ip := uint16(current - polysBase)
+	ip := uint32(current-polysBase) / sizeofPoly
 	pd := &tile.DetailMeshes[ip]
 
 	// Clamp point to be inside the polygon.
@@ -1300,7 +1303,7 @@ func (this *DtNavMesh) GetTileRef(tile *DtMeshTile) DtTileRef {
 	}
 	tileBase := uintptr(unsafe.Pointer(&(this.m_tiles[0])))
 	current := uintptr(unsafe.Pointer(tile))
-	it := (uint32)(current - tileBase)
+	it := (uint32)(current-tileBase) / sizeofMeshTile
 	return (DtTileRef)(this.EncodePolyId(tile.Salt, it, 0))
 }
 
@@ -1328,7 +1331,7 @@ func (this *DtNavMesh) GetPolyRefBase(tile *DtMeshTile) DtPolyRef {
 	}
 	tileBase := uintptr(unsafe.Pointer(&(this.m_tiles[0])))
 	current := uintptr(unsafe.Pointer(tile))
-	it := (uint32)(current - tileBase)
+	it := (uint32)(current-tileBase) / sizeofMeshTile
 	return this.EncodePolyId(tile.Salt, it, 0)
 }
 

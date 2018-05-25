@@ -327,3 +327,13 @@ func Test_data(t *testing.T) {
 	detour.DtAssert(cc[1].FirstLink == 100001)
 	detour.DtAssert(cc[1].Verts[0] == 201)
 }
+
+func Test_slice(t *testing.T) {
+	items := make([]detour.DtMeshTile, 3000)
+	a := &items[0]
+	b := &items[1]
+	tileBase := uintptr(unsafe.Pointer(a))
+	current := uintptr(unsafe.Pointer(b))
+	it := (uint32)(current-tileBase) / (uint32)(unsafe.Sizeof(detour.DtMeshTile{}))
+	detour.DtAssert(it == 1)
+}

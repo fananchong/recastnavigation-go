@@ -475,7 +475,7 @@ func (this *DtNavMeshQuery) ClosestPointOnPoly(ref DtPolyRef, pos, closest []flo
 
 	polyBase := uintptr(unsafe.Pointer(&(tile.Polys[0])))
 	current := uintptr(unsafe.Pointer(poly))
-	ip := (uint32)(current - polyBase)
+	ip := (uint32)(current-polyBase) / sizeofPoly
 	pd := &tile.DetailMeshes[ip]
 
 	// Clamp point to be inside the polygon.
@@ -619,7 +619,7 @@ func (this *DtNavMeshQuery) GetPolyHeight(ref DtPolyRef, pos []float32, height *
 	} else {
 		polyBase := uintptr(unsafe.Pointer(&(tile.Polys[0])))
 		current := uintptr(unsafe.Pointer(poly))
-		ip := (uint32)(current - polyBase)
+		ip := (uint32)(current-polyBase) / sizeofPoly
 		pd := &tile.DetailMeshes[ip]
 		for j := 0; j < int(pd.TriCount); j++ {
 			t := tile.DetailTris[(int(pd.TriBase)+j)*4:]
