@@ -37,5 +37,5 @@ func FindPath(start, end, ptlst []float32, ptCount *int, maxPolys int) {
 		(*C.float)(unsafe.Pointer(&end[0])),
 		(*C.float)(unsafe.Pointer(&ptlst[0])),
 		(*C.int)(unsafe.Pointer(ptCount)),
-		C.int(maxPolys))
+		C.int(maxPolys), 1)
 }

@@ -47,6 +47,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 
 	buf, err := ioutil.ReadAll(f)
 	if err != nil {
@@ -115,10 +116,18 @@ func GoFindPath(start, end, ptlst []float32, ptCount *int, maxPolys int) {
 		return
 	}
 
+	fmt.Println("startRef:", startRef, " endRef:", endRef)
+
 	polys := make([]detour.DtPolyRef, maxPolys)
 	var npolys int
 	navQuery.FindPath(startRef, endRef, start, end, &filter, polys, &npolys, maxPolys)
 	if npolys > 0 {
+		fmt.Println("findPath npolys:", npolys)
+		for i := 0; i < npolys; i++ {
+			fmt.Println(polys[i])
+		}
+		fmt.Println()
+
 		var epos [3]float32
 		detour.DtVcopy(epos[:], end)
 		if polys[npolys-1] != endRef {

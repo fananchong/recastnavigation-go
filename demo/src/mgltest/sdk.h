@@ -17,7 +17,7 @@ extern "C" {
 	NavMeshAPI void* CreateNavMeshSDK();
 	NavMeshAPI int Load(const char* path, void* sdkPtr);
 	//path的长度是maxPolys的三倍
-	NavMeshAPI void FindPath(void* sdkPtr, float *startPos, float *endPos, float *path, int* pathLen, const int maxPolys);
+	NavMeshAPI void FindPath(void* sdkPtr, float *startPos, float *endPos, float *path, int* pathLen, const int maxPolys, int log);
 
 #ifdef __cplusplus
 }
