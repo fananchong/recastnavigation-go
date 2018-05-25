@@ -1984,6 +1984,224 @@ func (this *DtNavMeshQuery) FindStraightPath(startPos, endPos []float32,
 	}
 }
 
+/// Moves from the start to the end position constrained to the navigation mesh.
+///  @param[in]		startRef		The reference id of the start polygon.
+///  @param[in]		startPos		A position of the mover within the start polygon. [(x, y, x)]
+///  @param[in]		endPos			The desired end position of the mover. [(x, y, z)]
+///  @param[in]		filter			The polygon filter to apply to the query.
+///  @param[out]	resultPos		The result position of the mover. [(x, y, z)]
+///  @param[out]	visited			The reference ids of the polygons visited during the move.
+///  @param[out]	visitedCount	The number of polygons visited during the move.
+///  @param[in]		maxVisitedSize	The maximum number of polygons the @p visited array can hold.
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) MoveAlongSurface(startRef DtPolyRef, startPos, endPos []float32,
+	filter *DtQueryFilter,
+	resultPos []float32, visited []DtPolyRef, visitedCount *int, maxVisitedSize int,
+	bHit *bool) DtStatus {
+	/// @par
+	///
+	/// This method is optimized for small delta movement and a small number of
+	/// polygons. If used for too great a distance, the result set will form an
+	/// incomplete path.
+	///
+	/// @p resultPos will equal the @p endPos if the end is reached.
+	/// Otherwise the closest reachable position will be returned.
+	///
+	/// @p resultPos is not projected onto the surface of the navigation
+	/// mesh. Use #getPolyHeight if this is needed.
+	///
+	/// This method treats the end position in the same manner as
+	/// the #raycast method. (As a 2D point.) See that method's documentation
+	/// for details.
+	///
+	/// If the @p visited array is too small to hold the entire result set, it will
+	/// be filled as far as possible from the start position toward the end
+	/// position.
+	///
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_tinyNodePool != nil)
+
+	*visitedCount = 0
+
+	// Validate input
+	if startRef == 0 {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	if !this.m_nav.IsValidPolyRef(startRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	status := DT_SUCCESS
+
+	const MAX_STACK int = 48
+	var stack [MAX_STACK]*DtNode
+	var nstack int
+
+	this.m_tinyNodePool.Clear()
+
+	startNode := this.m_tinyNodePool.GetNode(startRef, 0)
+	startNode.Pidx = 0
+	startNode.Cost = 0
+	startNode.Total = 0
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_CLOSED
+	stack[nstack] = startNode
+	nstack++
+
+	var bestPos [3]float32
+	bestDist := float32(math.MaxFloat32)
+	var bestNode *DtNode
+	DtVcopy(bestPos[:], startPos)
+
+	// Search constraints
+	var searchPos [3]float32
+	var searchRadSqr float32
+	DtVlerp(searchPos[:], startPos, endPos, 0.5)
+	searchRadSqr = DtSqrFloat32(DtVdist(startPos, endPos)/2.0 + 0.001)
+
+	var verts [DT_VERTS_PER_POLYGON * 3]float32
+
+	var wallNode *DtNode
+	for nstack != 0 {
+		// Pop front.
+		curNode := stack[0]
+		for i := 0; i < nstack-1; i++ {
+			stack[i] = stack[i+1]
+		}
+		nstack--
+
+		// Get poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		curRef := curNode.Id
+		var curTile *DtMeshTile
+		var curPoly *DtPoly
+		this.m_nav.GetTileAndPolyByRefUnsafe(curRef, &curTile, &curPoly)
+
+		// Collect vertices.
+		nverts := int(curPoly.VertCount)
+		for i := 0; i < nverts; i++ {
+			DtVcopy(verts[i*3:], curTile.Verts[curPoly.Verts[i]*3:])
+		}
+		// If target is inside the poly, stop search.
+		if DtPointInPolygon(endPos, verts[:], nverts) {
+			bestNode = curNode
+			DtVcopy(bestPos[:], endPos)
+			break
+		}
+
+		// Find wall edges and find nearest point inside the walls.
+		for i, j := 0, (int)(curPoly.VertCount-1); i < (int)(curPoly.VertCount); j, i = i, i+1 {
+			// Find links to neighbours.
+			const MAX_NEIS int = 8
+			nneis := 0
+			var neis [MAX_NEIS]DtPolyRef
+
+			if (curPoly.Neis[j] & DT_EXT_LINK) != 0 {
+				// Tile border.
+				for k := curPoly.FirstLink; k != DT_NULL_LINK; k = curTile.Links[k].Next {
+					link := &curTile.Links[k]
+					if link.Edge == uint8(j) {
+						if link.Ref != 0 {
+							var neiTile *DtMeshTile
+							var neiPoly *DtPoly
+							this.m_nav.GetTileAndPolyByRefUnsafe(link.Ref, &neiTile, &neiPoly)
+							if filter.PassFilter(link.Ref, neiTile, neiPoly) {
+								if nneis < MAX_NEIS {
+									neis[nneis] = link.Ref
+									nneis++
+								}
+							}
+						}
+					}
+				}
+			} else if curPoly.Neis[j] != 0 {
+				idx := (uint32)(curPoly.Neis[j] - 1)
+				ref := this.m_nav.GetPolyRefBase(curTile) | DtPolyRef(idx)
+				if filter.PassFilter(ref, curTile, &curTile.Polys[idx]) {
+					// Internal edge, encode id.
+					neis[nneis] = ref
+					nneis++
+				}
+			}
+
+			if nneis == 0 {
+				// Wall edge, calc distance.
+				vj := verts[j*3:]
+				vi := verts[i*3:]
+				var tseg float32
+				distSqr := DtDistancePtSegSqr2D(endPos, vj, vi, &tseg)
+				if distSqr < bestDist {
+					// Update nearest distance.
+					DtVlerp(bestPos[:], vj, vi, tseg)
+					bestDist = distSqr
+					bestNode = curNode
+					wallNode = curNode
+				}
+			} else {
+				for k := 0; k < nneis; k++ {
+					// Skip if no node can be allocated.
+					neighbourNode := this.m_tinyNodePool.GetNode(neis[k], 0)
+					if neighbourNode == nil {
+						continue
+					}
+					// Skip if already visited.
+					if (neighbourNode.Flags & DT_NODE_CLOSED) != 0 {
+						continue
+					}
+					// Skip the link if it is too far from search constraint.
+					// TODO: Maybe should use getPortalPoints(), but this one is way faster.
+					vj := verts[j*3:]
+					vi := verts[i*3:]
+					var tseg float32
+					distSqr := DtDistancePtSegSqr2D(searchPos[:], vj, vi, &tseg)
+					if distSqr > searchRadSqr {
+						continue
+					}
+					// Mark as the node as visited and push to queue.
+					if nstack < MAX_STACK {
+						neighbourNode.Pidx = this.m_tinyNodePool.GetNodeIdx(curNode)
+						neighbourNode.Flags |= DT_NODE_CLOSED
+						stack[nstack] = neighbourNode
+						nstack++
+					}
+				}
+			}
+		}
+	}
+
+	var n int
+	if bestNode != nil {
+		// Reverse the path.
+		var prev *DtNode
+		node := bestNode
+		for node != nil {
+			next := this.m_tinyNodePool.GetNodeAtIdx(node.Pidx)
+			node.Pidx = this.m_tinyNodePool.GetNodeIdx(prev)
+			prev = node
+			node = next
+		}
+
+		// Store result
+		node = prev
+		for node != nil {
+			visited[n] = node.Id
+			n++
+			if n >= maxVisitedSize {
+				status |= DT_BUFFER_TOO_SMALL
+				break
+			}
+			node = this.m_tinyNodePool.GetNodeAtIdx(node.Pidx)
+		}
+	}
+
+	*bHit = (wallNode != nil && wallNode == bestNode)
+
+	DtVcopy(resultPos, bestPos[:])
+
+	*visitedCount = n
+
+	return status
+}
+
 func (this *DtNavMeshQuery) getPortalPoints(from, to DtPolyRef, left, right []float32,
 	fromType, toType *DtPolyTypes) DtStatus {
 	DtAssert(this.m_nav != nil)
