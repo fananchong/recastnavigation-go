@@ -128,7 +128,7 @@ func (this *DtNavMeshQuery) Init(nav *DtNavMesh, maxNodes int) DtStatus {
 		this.m_nodePool.Clear()
 	}
 
-	if this.m_tinyNodePool != nil {
+	if this.m_tinyNodePool == nil {
 		this.m_tinyNodePool = DtAllocNodePool(64, 32)
 		if this.m_tinyNodePool == nil {
 			return DT_FAILURE | DT_OUT_OF_MEMORY
