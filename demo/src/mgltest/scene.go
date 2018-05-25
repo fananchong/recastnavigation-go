@@ -53,17 +53,17 @@ func (s *Scene) Draw() {
 
 	if s.u.ptCount > 0 {
 		spathCol := mgl.DuRGBA(64, 16, 0, 220)
-		s.DrawPath(s.u.ptlst[:], s.u.ptCount, spathCol)
+		s.DrawPath(s.u.ptlst[:], s.u.ptCount, spathCol, 4)
 	}
 	if s.u.goptCount > 0 {
 		spathCol := mgl.DuRGBA(64, 255, 0, 220)
-		s.DrawPath(s.u.goptlst[:], s.u.goptCount, spathCol)
+		s.DrawPath(s.u.goptlst[:], s.u.goptCount, spathCol, 2)
 	}
 }
 
-func (s *Scene) DrawPath(ptlst []float32, ptCount int, spathCol uint32) {
+func (s *Scene) DrawPath(ptlst []float32, ptCount int, spathCol uint32, blod float32) {
 
-	mgl.Begin(gl.LINES, 2)
+	mgl.Begin(gl.LINES, blod)
 	for i := 0; i < ptCount-1; i++ {
 		mgl.Vertex2(ptlst[i*3], ptlst[i*3+1]+0.4, ptlst[i*3+2], spathCol)
 		mgl.Vertex2(ptlst[(i+1)*3], ptlst[(i+1)*3+1]+0.4, ptlst[(i+1)*3+2], spathCol)

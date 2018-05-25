@@ -29,13 +29,14 @@ const (
 var (
 	navMesh     *detour.DtNavMesh
 	navQuery    *detour.DtNavMeshQuery
-	filter      detour.DtQueryFilter
+	filter      *detour.DtQueryFilter
 	polyPickExt [3]float32
 )
 
 func init() {
 	navMesh = detour.DtAllocNavMesh()
 	navQuery = detour.DtAllocNavMeshQuery()
+	filter = detour.DtAllocDtQueryFilter()
 	filter.SetIncludeFlags(SAMPLE_POLYFLAGS_ALL ^ SAMPLE_POLYFLAGS_DISABLED)
 	filter.SetExcludeFlags(0)
 
@@ -105,12 +106,12 @@ func init() {
 func GoFindPath(start, end, ptlst []float32, ptCount *int, maxPolys int) {
 	var startRef detour.DtPolyRef
 	var endRef detour.DtPolyRef
-	status := navQuery.FindNearestPoly(start, polyPickExt[:], &filter, &startRef, nil)
+	status := navQuery.FindNearestPoly(start, polyPickExt[:], filter, &startRef, nil)
 	if detour.DtStatusFailed(status) {
 		fmt.Println("startref falied")
 		return
 	}
-	status = navQuery.FindNearestPoly(end, polyPickExt[:], &filter, &endRef, nil)
+	status = navQuery.FindNearestPoly(end, polyPickExt[:], filter, &endRef, nil)
 	if detour.DtStatusFailed(status) {
 		fmt.Println("startref falied")
 		return
@@ -120,7 +121,7 @@ func GoFindPath(start, end, ptlst []float32, ptCount *int, maxPolys int) {
 
 	polys := make([]detour.DtPolyRef, maxPolys)
 	var npolys int
-	navQuery.FindPath(startRef, endRef, start, end, &filter, polys, &npolys, maxPolys)
+	navQuery.FindPath(startRef, endRef, start, end, filter, polys, &npolys, maxPolys)
 	if npolys > 0 {
 		fmt.Println("findPath npolys:", npolys)
 		for i := 0; i < npolys; i++ {
