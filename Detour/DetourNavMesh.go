@@ -56,7 +56,7 @@ const (
 )
 
 /// Vertex flags returned by dtNavMeshQuery::findStraightPath.
-type DtStraightPathFlags int
+type DtStraightPathFlags uint8
 
 const (
 	DT_STRAIGHTPATH_START              DtStraightPathFlags = 0x01 ///< The vertex is the start position in the path.
