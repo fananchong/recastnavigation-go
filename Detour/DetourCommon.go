@@ -112,6 +112,20 @@ func DtMaxInt16(a, b int16) int16 {
 	}
 }
 
+func DtMaxUInt8(a, b uint8) uint8 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func DtMaxInt8(a, b int8) int8 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 /// Returns the absolute value.
 ///  @param[in]		a	The value.
 ///  @return The absolute value of the specified value.
@@ -965,3 +979,15 @@ A negative return value indicates:
 </ul>
 
 */
+
+func MemsetUInt8(dst []uint8, val uint8) {
+	for i := 0; i < len(dst); i++ {
+		dst[i] = val
+	}
+}
+
+func MemsetUInt16(dst []uint16, val uint16) {
+	for i := 0; i < len(dst); i++ {
+		dst[i] = val
+	}
+}
