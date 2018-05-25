@@ -53,19 +53,28 @@ func (s *Scene) Draw() {
 
 	if s.u.ptCount > 0 {
 		spathCol := mgl.DuRGBA(64, 16, 0, 220)
-		mgl.Begin(gl.LINES, 2)
-		for i := 0; i < s.u.ptCount-1; i++ {
-			mgl.Vertex2(s.u.ptlst[i*3], s.u.ptlst[i*3+1]+0.4, s.u.ptlst[i*3+2], spathCol)
-			mgl.Vertex2(s.u.ptlst[(i+1)*3], s.u.ptlst[(i+1)*3+1]+0.4, s.u.ptlst[(i+1)*3+2], spathCol)
-		}
-		mgl.End()
-
-		mgl.Begin(gl.POINTS, 6)
-		for i := 0; i < s.u.ptCount; i++ {
-			mgl.Vertex2(s.u.ptlst[i*3], s.u.ptlst[i*3+1]+0.4, s.u.ptlst[i*3+2], spathCol)
-		}
-		mgl.End()
+		s.DrawPath(s.u.ptlst[:], s.u.ptCount, spathCol)
 	}
+	if s.u.goptCount > 0 {
+		spathCol := mgl.DuRGBA(64, 255, 0, 220)
+		s.DrawPath(s.u.goptlst[:], s.u.goptCount, spathCol)
+	}
+}
+
+func (s *Scene) DrawPath(ptlst []float32, ptCount int, spathCol uint32) {
+
+	mgl.Begin(gl.LINES, 2)
+	for i := 0; i < ptCount-1; i++ {
+		mgl.Vertex2(ptlst[i*3], ptlst[i*3+1]+0.4, ptlst[i*3+2], spathCol)
+		mgl.Vertex2(ptlst[(i+1)*3], ptlst[(i+1)*3+1]+0.4, ptlst[(i+1)*3+2], spathCol)
+	}
+	mgl.End()
+
+	mgl.Begin(gl.POINTS, 6)
+	for i := 0; i < ptCount; i++ {
+		mgl.Vertex2(ptlst[i*3], ptlst[i*3+1]+0.4, ptlst[i*3+2], spathCol)
+	}
+	mgl.End()
 }
 
 func (s *Scene) Run(ctx context.Context) {

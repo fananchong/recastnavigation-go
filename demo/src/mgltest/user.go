@@ -9,10 +9,12 @@ const (
 )
 
 type User struct {
-	pos     []float32
-	destPos []float32
-	ptlst   [256 * 3]float32
-	ptCount int
+	pos       []float32
+	destPos   []float32
+	ptlst     [256 * 3]float32
+	ptCount   int
+	goptlst   [256 * 3]float32
+	goptCount int
 }
 
 func (u *User) SetPos(pos *[3]float64) {
@@ -27,7 +29,7 @@ func (u *User) SetPos(pos *[3]float64) {
 		}
 		u.destPos[0], u.destPos[1], u.destPos[2] = float32(pos[0]), float32(pos[1]), float32(pos[2])
 
-		// FindPath(u.pos, u.destPos, u.ptlst[0:], &u.ptCount, maxPolys)
-		GoFindPath(u.pos, u.destPos, u.ptlst[0:], &u.ptCount, maxPolys)
+		FindPath(u.pos, u.destPos, u.ptlst[0:], &u.ptCount, maxPolys)
+		GoFindPath(u.pos, u.destPos, u.goptlst[0:], &u.goptCount, maxPolys)
 	}
 }
