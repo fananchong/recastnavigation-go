@@ -1855,7 +1855,7 @@ func (this *DtNavMeshQuery) FindStraightPath(startPos, endPos []float32,
 					if *straightPathCount >= maxStraightPath {
 						return DT_SUCCESS | DT_PARTIAL_RESULT | DT_BUFFER_TOO_SMALL
 					} else {
-						return DT_SUCCESS | DT_PARTIAL_RESULT | 0
+						return DT_SUCCESS | DT_PARTIAL_RESULT
 					}
 				}
 
@@ -1998,7 +1998,7 @@ func (this *DtNavMeshQuery) FindStraightPath(startPos, endPos []float32,
 	if *straightPathCount >= maxStraightPath {
 		return DT_SUCCESS | DT_BUFFER_TOO_SMALL
 	} else {
-		return DT_SUCCESS | 0
+		return DT_SUCCESS
 	}
 }
 
