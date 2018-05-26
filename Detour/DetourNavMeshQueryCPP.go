@@ -2653,3 +2653,1000 @@ func (this *DtNavMeshQuery) Raycast2(startRef DtPolyRef, startPos, endPos []floa
 
 	return status
 }
+
+/// Finds the polygons along the navigation graph that touch the specified circle.
+///  @param[in]		startRef		The reference id of the polygon where the search starts.
+///  @param[in]		centerPos		The center of the search circle. [(x, y, z)]
+///  @param[in]		radius			The radius of the search circle.
+///  @param[in]		filter			The polygon filter to apply to the query.
+///  @param[out]	resultRef		The reference ids of the polygons touched by the circle. [opt]
+///  @param[out]	resultParent	The reference ids of the parent polygons for each result.
+///  								Zero if a result polygon has no parent. [opt]
+///  @param[out]	resultCost		The search cost from @p centerPos to the polygon. [opt]
+///  @param[out]	resultCount		The number of polygons found. [opt]
+///  @param[in]		maxResult		The maximum number of polygons the result arrays can hold.
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) FindPolysAroundCircle(startRef DtPolyRef, centerPos []float32, radius float32,
+	filter *DtQueryFilter,
+	resultRef, resultParent []DtPolyRef, resultCost []float32,
+	resultCount *int, maxResult int) DtStatus {
+	/// @par
+	///
+	/// At least one result array must be provided.
+	///
+	/// The order of the result set is from least to highest cost to reach the polygon.
+	///
+	/// A common use case for this method is to perform Dijkstra searches.
+	/// Candidate polygons are found by searching the graph beginning at the start polygon.
+	///
+	/// If a polygon is not found via the graph search, even if it intersects the
+	/// search circle, it will not be included in the result set. For example:
+	///
+	/// polyA is the start polygon.
+	/// polyB shares an edge with polyA. (Is adjacent.)
+	/// polyC shares an edge with polyB, but not with polyA
+	/// Even if the search circle overlaps polyC, it will not be included in the
+	/// result set unless polyB is also in the set.
+	///
+	/// The value of the center point is used as the start position for cost
+	/// calculations. It is not projected onto the surface of the mesh, so its
+	/// y-value will effect the costs.
+	///
+	/// Intersection tests occur in 2D. All polygons and the search circle are
+	/// projected onto the xz-plane. So the y-value of the center point does not
+	/// effect intersection tests.
+	///
+	/// If the result arrays are to small to hold the entire result set, they will be
+	/// filled to capacity.
+	///
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_nodePool != nil)
+	DtAssert(this.m_openList != nil)
+
+	*resultCount = 0
+
+	// Validate input
+	if startRef == 0 || !this.m_nav.IsValidPolyRef(startRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	this.m_nodePool.Clear()
+	this.m_openList.Clear()
+
+	startNode := this.m_nodePool.GetNode(startRef, 0)
+	DtVcopy(startNode.Pos[:], centerPos)
+	startNode.Pidx = 0
+	startNode.Cost = 0
+	startNode.Total = 0
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_OPEN
+	this.m_openList.Push(startNode)
+
+	status := DT_SUCCESS
+
+	n := 0
+
+	radiusSqr := DtSqrFloat32(radius)
+
+	for !this.m_openList.Empty() {
+		bestNode := this.m_openList.Pop()
+		bestNode.Flags &= ^DT_NODE_OPEN
+		bestNode.Flags |= DT_NODE_CLOSED
+
+		// Get poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		bestRef := bestNode.Id
+		var bestTile *DtMeshTile
+		var bestPoly *DtPoly
+		this.m_nav.GetTileAndPolyByRefUnsafe(bestRef, &bestTile, &bestPoly)
+
+		// Get parent poly and tile.
+		var parentRef DtPolyRef
+		var parentTile *DtMeshTile
+		var parentPoly *DtPoly
+		if bestNode.Pidx != 0 {
+			parentRef = this.m_nodePool.GetNodeAtIdx(bestNode.Pidx).Id
+		}
+		if parentRef != 0 {
+			this.m_nav.GetTileAndPolyByRefUnsafe(parentRef, &parentTile, &parentPoly)
+		}
+		if n < maxResult {
+			if resultRef != nil {
+				resultRef[n] = bestRef
+			}
+			if resultParent != nil {
+				resultParent[n] = parentRef
+			}
+			if resultCost != nil {
+				resultCost[n] = bestNode.Total
+			}
+			n++
+		} else {
+			status |= DT_BUFFER_TOO_SMALL
+		}
+
+		for i := bestPoly.FirstLink; i != DT_NULL_LINK; i = bestTile.Links[i].Next {
+			link := &bestTile.Links[i]
+			neighbourRef := link.Ref
+			// Skip invalid neighbours and do not follow back to parent.
+			if neighbourRef == 0 || neighbourRef == parentRef {
+				continue
+			}
+			// Expand to neighbour
+			var neighbourTile *DtMeshTile
+			var neighbourPoly *DtPoly
+			this.m_nav.GetTileAndPolyByRefUnsafe(neighbourRef, &neighbourTile, &neighbourPoly)
+
+			// Do not advance if the polygon is excluded by the filter.
+			if !filter.PassFilter(neighbourRef, neighbourTile, neighbourPoly) {
+				continue
+			}
+			// Find edge and calc distance to the edge.
+			var va, vb [3]float32
+			if stat := this.getPortalPoints2(bestRef, bestPoly, bestTile, neighbourRef, neighbourPoly, neighbourTile, va[:], vb[:]); DtStatusFailed(stat) {
+				continue
+			}
+			// If the circle is not touching the next polygon, skip it.
+			var tseg float32
+			distSqr := DtDistancePtSegSqr2D(centerPos, va[:], vb[:], &tseg)
+			if distSqr > radiusSqr {
+				continue
+			}
+			neighbourNode := this.m_nodePool.GetNode(neighbourRef, 0)
+			if neighbourNode == nil {
+				status |= DT_OUT_OF_NODES
+				continue
+			}
+
+			if (neighbourNode.Flags & DT_NODE_CLOSED) != 0 {
+				continue
+			}
+			// Cost
+			if neighbourNode.Flags == 0 {
+				DtVlerp(neighbourNode.Pos[:], va[:], vb[:], 0.5)
+			}
+			cost := filter.GetCost(
+				bestNode.Pos[:], neighbourNode.Pos[:],
+				parentRef, parentTile, parentPoly,
+				bestRef, bestTile, bestPoly,
+				neighbourRef, neighbourTile, neighbourPoly)
+
+			total := bestNode.Total + cost
+
+			// The node is already in open list and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			neighbourNode.Id = neighbourRef
+			neighbourNode.Pidx = this.m_nodePool.GetNodeIdx(bestNode)
+			neighbourNode.Total = total
+
+			if (neighbourNode.Flags & DT_NODE_OPEN) != 0 {
+				this.m_openList.Modify(neighbourNode)
+			} else {
+				neighbourNode.Flags = DT_NODE_OPEN
+				this.m_openList.Push(neighbourNode)
+			}
+		}
+	}
+
+	*resultCount = n
+
+	return status
+}
+
+/// Finds the polygons along the naviation graph that touch the specified convex polygon.
+///  @param[in]		startRef		The reference id of the polygon where the search starts.
+///  @param[in]		verts			The vertices describing the convex polygon. (CCW)
+///  								[(x, y, z) * @p nverts]
+///  @param[in]		nverts			The number of vertices in the polygon.
+///  @param[in]		filter			The polygon filter to apply to the query.
+///  @param[out]	resultRef		The reference ids of the polygons touched by the search polygon. [opt]
+///  @param[out]	resultParent	The reference ids of the parent polygons for each result. Zero if a
+///  								result polygon has no parent. [opt]
+///  @param[out]	resultCost		The search cost from the centroid point to the polygon. [opt]
+///  @param[out]	resultCount		The number of polygons found.
+///  @param[in]		maxResult		The maximum number of polygons the result arrays can hold.
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) FindPolysAroundShape(startRef DtPolyRef, verts []float32, nverts int,
+	filter *DtQueryFilter,
+	resultRef, resultParent []DtPolyRef, resultCost []float32,
+	resultCount *int, maxResult int) DtStatus {
+	/// @par
+	///
+	/// The order of the result set is from least to highest cost.
+	///
+	/// At least one result array must be provided.
+	///
+	/// A common use case for this method is to perform Dijkstra searches.
+	/// Candidate polygons are found by searching the graph beginning at the start
+	/// polygon.
+	///
+	/// The same intersection test restrictions that apply to findPolysAroundCircle()
+	/// method apply to this method.
+	///
+	/// The 3D centroid of the search polygon is used as the start position for cost
+	/// calculations.
+	///
+	/// Intersection tests occur in 2D. All polygons are projected onto the
+	/// xz-plane. So the y-values of the vertices do not effect intersection tests.
+	///
+	/// If the result arrays are is too small to hold the entire result set, they will
+	/// be filled to capacity.
+	///
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_nodePool != nil)
+	DtAssert(this.m_openList != nil)
+
+	*resultCount = 0
+
+	// Validate input
+	if startRef == 0 || !this.m_nav.IsValidPolyRef(startRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	this.m_nodePool.Clear()
+	this.m_openList.Clear()
+
+	var centerPos [3]float32
+	for i := 0; i < nverts; i++ {
+		DtVadd(centerPos[:], centerPos[:], verts[i*3:])
+	}
+	DtVscale(centerPos[:], centerPos[:], 1.0/float32(nverts))
+
+	startNode := this.m_nodePool.GetNode(startRef, 0)
+	DtVcopy(startNode.Pos[:], centerPos[:])
+	startNode.Pidx = 0
+	startNode.Cost = 0
+	startNode.Total = 0
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_OPEN
+	this.m_openList.Push(startNode)
+
+	status := DT_SUCCESS
+
+	n := 0
+
+	for !this.m_openList.Empty() {
+		bestNode := this.m_openList.Pop()
+		bestNode.Flags &= ^DT_NODE_OPEN
+		bestNode.Flags |= DT_NODE_CLOSED
+
+		// Get poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		bestRef := bestNode.Id
+		var bestTile *DtMeshTile
+		var bestPoly *DtPoly
+		this.m_nav.GetTileAndPolyByRefUnsafe(bestRef, &bestTile, &bestPoly)
+
+		// Get parent poly and tile.
+		var parentRef DtPolyRef
+		var parentTile *DtMeshTile
+		var parentPoly *DtPoly
+		if bestNode.Pidx != 0 {
+			parentRef = this.m_nodePool.GetNodeAtIdx(bestNode.Pidx).Id
+		}
+		if parentRef != 0 {
+			this.m_nav.GetTileAndPolyByRefUnsafe(parentRef, &parentTile, &parentPoly)
+		}
+		if n < maxResult {
+			if resultRef != nil {
+				resultRef[n] = bestRef
+			}
+			if resultParent != nil {
+				resultParent[n] = parentRef
+			}
+			if resultCost != nil {
+				resultCost[n] = bestNode.Total
+			}
+
+			n++
+		} else {
+			status |= DT_BUFFER_TOO_SMALL
+		}
+
+		for i := bestPoly.FirstLink; i != DT_NULL_LINK; i = bestTile.Links[i].Next {
+			link := &bestTile.Links[i]
+			neighbourRef := link.Ref
+			// Skip invalid neighbours and do not follow back to parent.
+			if neighbourRef == 0 || neighbourRef == parentRef {
+				continue
+			}
+			// Expand to neighbour
+			var neighbourTile *DtMeshTile
+			var neighbourPoly *DtPoly
+			this.m_nav.GetTileAndPolyByRefUnsafe(neighbourRef, &neighbourTile, &neighbourPoly)
+
+			// Do not advance if the polygon is excluded by the filter.
+			if !filter.PassFilter(neighbourRef, neighbourTile, neighbourPoly) {
+				continue
+			}
+			// Find edge and calc distance to the edge.
+			var va, vb [3]float32
+			if stat := this.getPortalPoints2(bestRef, bestPoly, bestTile, neighbourRef, neighbourPoly, neighbourTile, va[:], vb[:]); DtStatusFailed(stat) {
+				continue
+			}
+			// If the poly is not touching the edge to the next polygon, skip the connection it.
+			var tmin, tmax float32
+			var segMin, segMax int
+			if !DtIntersectSegmentPoly2D(va[:], vb[:], verts, nverts, &tmin, &tmax, &segMin, &segMax) {
+				continue
+			}
+			if tmin > 1.0 || tmax < 0.0 {
+				continue
+			}
+			neighbourNode := this.m_nodePool.GetNode(neighbourRef, 0)
+			if neighbourNode == nil {
+				status |= DT_OUT_OF_NODES
+				continue
+			}
+
+			if (neighbourNode.Flags & DT_NODE_CLOSED) != 0 {
+				continue
+			}
+			// Cost
+			if neighbourNode.Flags == 0 {
+				DtVlerp(neighbourNode.Pos[:], va[:], vb[:], 0.5)
+			}
+			cost := filter.GetCost(
+				bestNode.Pos[:], neighbourNode.Pos[:],
+				parentRef, parentTile, parentPoly,
+				bestRef, bestTile, bestPoly,
+				neighbourRef, neighbourTile, neighbourPoly)
+
+			total := bestNode.Total + cost
+
+			// The node is already in open list and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			neighbourNode.Id = neighbourRef
+			neighbourNode.Pidx = this.m_nodePool.GetNodeIdx(bestNode)
+			neighbourNode.Total = total
+
+			if (neighbourNode.Flags & DT_NODE_OPEN) != 0 {
+				this.m_openList.Modify(neighbourNode)
+			} else {
+				neighbourNode.Flags = DT_NODE_OPEN
+				this.m_openList.Push(neighbourNode)
+			}
+		}
+	}
+
+	*resultCount = n
+
+	return status
+}
+
+/// Gets a path from the explored nodes in the previous search.
+///  @param[in]		endRef		The reference id of the end polygon.
+///  @param[out]	path		An ordered list of polygon references representing the path. (Start to end.)
+///  							[(polyRef) * @p pathCount]
+///  @param[out]	pathCount	The number of polygons returned in the @p path array.
+///  @param[in]		maxPath		The maximum number of polygons the @p path array can hold. [Limit: >= 0]
+///  @returns		The status flags. Returns DT_FAILURE | DT_INVALID_PARAM if any parameter is wrong, or if
+///  				@p endRef was not explored in the previous search. Returns DT_SUCCESS | DT_BUFFER_TOO_SMALL
+///  				if @p path cannot contain the entire path. In this case it is filled to capacity with a partial path.
+///  				Otherwise returns DT_SUCCESS.
+///  @remarks		The result of this function depends on the state of the query object. For that reason it should only
+///  				be used immediately after one of the two Dijkstra searches, findPolysAroundCircle or findPolysAroundShape.
+func (this *DtNavMeshQuery) GetPathFromDijkstraSearch(endRef DtPolyRef, path []DtPolyRef, pathCount *int, maxPath int) DtStatus {
+	if !this.m_nav.IsValidPolyRef(endRef) || path == nil || pathCount == nil || maxPath < 0 {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	*pathCount = 0
+
+	var endNode [1]*DtNode
+	if this.m_nodePool.FindNodes(endRef, endNode[:], 1) != 1 ||
+		(endNode[0].Flags&DT_NODE_CLOSED) == 0 {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	return this.getPathToNode(endNode[0], path, pathCount, maxPath)
+}
+
+/// Finds the non-overlapping navigation polygons in the local neighbourhood around the center position.
+///  @param[in]		startRef		The reference id of the polygon where the search starts.
+///  @param[in]		centerPos		The center of the query circle. [(x, y, z)]
+///  @param[in]		radius			The radius of the query circle.
+///  @param[in]		filter			The polygon filter to apply to the query.
+///  @param[out]	resultRef		The reference ids of the polygons touched by the circle.
+///  @param[out]	resultParent	The reference ids of the parent polygons for each result.
+///  								Zero if a result polygon has no parent. [opt]
+///  @param[out]	resultCount		The number of polygons found.
+///  @param[in]		maxResult		The maximum number of polygons the result arrays can hold.
+/// @returns The status flags for the query.
+func (this *DtNavMeshQuery) FindLocalNeighbourhood(startRef DtPolyRef, centerPos []float32, radius float32,
+	filter *DtQueryFilter,
+	resultRef, resultParent []DtPolyRef,
+	resultCount *int, maxResult int) DtStatus {
+	/// @par
+	///
+	/// This method is optimized for a small search radius and small number of result
+	/// polygons.
+	///
+	/// Candidate polygons are found by searching the navigation graph beginning at
+	/// the start polygon.
+	///
+	/// The same intersection test restrictions that apply to the findPolysAroundCircle
+	/// mehtod applies to this method.
+	///
+	/// The value of the center point is used as the start point for cost calculations.
+	/// It is not projected onto the surface of the mesh, so its y-value will effect
+	/// the costs.
+	///
+	/// Intersection tests occur in 2D. All polygons and the search circle are
+	/// projected onto the xz-plane. So the y-value of the center point does not
+	/// effect intersection tests.
+	///
+	/// If the result arrays are is too small to hold the entire result set, they will
+	/// be filled to capacity.
+	///
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_tinyNodePool != nil)
+
+	*resultCount = 0
+
+	// Validate input
+	if startRef == 0 || !this.m_nav.IsValidPolyRef(startRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	const MAX_STACK int = 48
+	var stack [MAX_STACK]*DtNode
+	nstack := 0
+
+	this.m_tinyNodePool.Clear()
+
+	startNode := this.m_tinyNodePool.GetNode(startRef, 0)
+	startNode.Pidx = 0
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_CLOSED
+	stack[nstack] = startNode
+	nstack++
+
+	radiusSqr := DtSqrFloat32(radius)
+
+	var pa [DT_VERTS_PER_POLYGON * 3]float32
+	var pb [DT_VERTS_PER_POLYGON * 3]float32
+
+	status := DT_SUCCESS
+
+	n := 0
+	if n < maxResult {
+		resultRef[n] = startNode.Id
+		if resultParent != nil {
+			resultParent[n] = 0
+		}
+		n++
+	} else {
+		status |= DT_BUFFER_TOO_SMALL
+	}
+
+	for nstack != 0 {
+		// Pop front.
+		curNode := stack[0]
+		for i := 0; i < nstack-1; i++ {
+			stack[i] = stack[i+1]
+		}
+		nstack--
+
+		// Get poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		curRef := curNode.Id
+		var curTile *DtMeshTile
+		var curPoly *DtPoly
+		this.m_nav.GetTileAndPolyByRefUnsafe(curRef, &curTile, &curPoly)
+
+		for i := curPoly.FirstLink; i != DT_NULL_LINK; i = curTile.Links[i].Next {
+			link := &curTile.Links[i]
+			neighbourRef := link.Ref
+			// Skip invalid neighbours.
+			if neighbourRef == 0 {
+				continue
+			}
+			// Skip if cannot alloca more nodes.
+			neighbourNode := this.m_tinyNodePool.GetNode(neighbourRef, 0)
+			if neighbourNode == nil {
+				continue
+			}
+			// Skip visited.
+			if (neighbourNode.Flags & DT_NODE_CLOSED) != 0 {
+				continue
+			}
+			// Expand to neighbour
+			var neighbourTile *DtMeshTile
+			var neighbourPoly *DtPoly
+			this.m_nav.GetTileAndPolyByRefUnsafe(neighbourRef, &neighbourTile, &neighbourPoly)
+
+			// Skip off-mesh connections.
+			if neighbourPoly.GetType() == DT_POLYTYPE_OFFMESH_CONNECTION {
+				continue
+			}
+			// Do not advance if the polygon is excluded by the filter.
+			if !filter.PassFilter(neighbourRef, neighbourTile, neighbourPoly) {
+				continue
+			}
+			// Find edge and calc distance to the edge.
+			var va, vb [3]float32
+			if stat := this.getPortalPoints2(curRef, curPoly, curTile, neighbourRef, neighbourPoly, neighbourTile, va[:], vb[:]); DtStatusFailed(stat) {
+				continue
+			}
+			// If the circle is not touching the next polygon, skip it.
+			var tseg float32
+			distSqr := DtDistancePtSegSqr2D(centerPos, va[:], vb[:], &tseg)
+			if distSqr > radiusSqr {
+				continue
+			}
+			// Mark node visited, this is done before the overlap test so that
+			// we will not visit the poly again if the test fails.
+			neighbourNode.Flags |= DT_NODE_CLOSED
+			neighbourNode.Pidx = this.m_tinyNodePool.GetNodeIdx(curNode)
+
+			// Check that the polygon does not collide with existing polygons.
+
+			// Collect vertices of the neighbour poly.
+			npa := int(neighbourPoly.VertCount)
+			for k := 0; k < npa; k++ {
+				DtVcopy(pa[k*3:], neighbourTile.Verts[neighbourPoly.Verts[k]*3:])
+			}
+			overlap := false
+			for j := 0; j < n; j++ {
+				pastRef := resultRef[j]
+
+				// Connected polys do not overlap.
+				connected := false
+				for k := curPoly.FirstLink; k != DT_NULL_LINK; k = curTile.Links[k].Next {
+					if curTile.Links[k].Ref == pastRef {
+						connected = true
+						break
+					}
+				}
+				if connected {
+					continue
+				}
+				// Potentially overlapping.
+				var pastTile *DtMeshTile
+				var pastPoly *DtPoly
+				this.m_nav.GetTileAndPolyByRefUnsafe(pastRef, &pastTile, &pastPoly)
+
+				// Get vertices and test overlap
+				npb := int(pastPoly.VertCount)
+				for k := 0; k < npb; k++ {
+					DtVcopy(pb[k*3:], pastTile.Verts[pastPoly.Verts[k]*3:])
+				}
+				if DtOverlapPolyPoly2D(pa[:], npa, pb[:], npb) {
+					overlap = true
+					break
+				}
+			}
+			if overlap {
+				continue
+			}
+			// This poly is fine, store and advance to the poly.
+			if n < maxResult {
+				resultRef[n] = neighbourRef
+				if resultParent != nil {
+					resultParent[n] = curRef
+				}
+				n++
+			} else {
+				status |= DT_BUFFER_TOO_SMALL
+			}
+
+			if nstack < MAX_STACK {
+				stack[nstack] = neighbourNode
+				nstack++
+			}
+		}
+	}
+
+	*resultCount = n
+
+	return status
+}
+
+type dtSegInterval struct {
+	ref        DtPolyRef
+	tmin, tmax int16
+}
+
+func insertInterval(ints []dtSegInterval, nints *int, maxInts int,
+	tmin, tmax int16, ref DtPolyRef) {
+	if *nints+1 > maxInts {
+		return
+	}
+	// Find insertion point.
+	idx := 0
+	for idx < *nints {
+		if tmax <= ints[idx].tmin {
+			break
+		}
+		idx++
+	}
+	// Move current results.
+	if (*nints - idx) != 0 {
+		for i := *nints; i >= idx+1; i-- {
+			ints[i] = ints[i-1]
+		}
+	}
+	// Store
+	ints[idx].ref = ref
+	ints[idx].tmin = tmin
+	ints[idx].tmax = tmax
+	(*nints)++
+}
+
+/// Returns the segments for the specified polygon, optionally including portals.
+///  @param[in]		ref				The reference id of the polygon.
+///  @param[in]		filter			The polygon filter to apply to the query.
+///  @param[out]	segmentVerts	The segments. [(ax, ay, az, bx, by, bz) * segmentCount]
+///  @param[out]	segmentRefs		The reference ids of each segment's neighbor polygon.
+///  								Or zero if the segment is a wall. [opt] [(parentRef) * @p segmentCount]
+///  @param[out]	segmentCount	The number of segments returned.
+///  @param[in]		maxSegments		The maximum number of segments the result arrays can hold.
+/// @returns The status flags for the query.
+/// @par
+///
+/// If the @p segmentRefs parameter is provided, then all polygon segments will be returned.
+/// Otherwise only the wall segments are returned.
+///
+/// A segment that is normally a portal will be included in the result set as a
+/// wall if the @p filter results in the neighbor polygon becoomming impassable.
+///
+/// The @p segmentVerts and @p segmentRefs buffers should normally be sized for the
+/// maximum segments per polygon of the source navigation mesh.
+///
+func (this *DtNavMeshQuery) GetPolyWallSegments(ref DtPolyRef, filter *DtQueryFilter,
+	segmentVerts []float32, segmentRefs []DtPolyRef, segmentCount *int,
+	maxSegments int) DtStatus {
+	DtAssert(this.m_nav != nil)
+
+	*segmentCount = 0
+
+	var tile *DtMeshTile
+	var poly *DtPoly
+	if DtStatusFailed(this.m_nav.GetTileAndPolyByRef(ref, &tile, &poly)) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	n := 0
+	const MAX_INTERVAL int = 16
+	var ints [MAX_INTERVAL]dtSegInterval
+	var nints int
+
+	storePortals := (segmentRefs != nil)
+
+	status := DT_SUCCESS
+
+	for i, j := 0, (int)(poly.VertCount-1); i < (int)(poly.VertCount); j, i = i, i+1 {
+		// Skip non-solid edges.
+		nints = 0
+		if (poly.Neis[j] & DT_EXT_LINK) != 0 {
+			// Tile border.
+			for k := poly.FirstLink; k != DT_NULL_LINK; k = tile.Links[k].Next {
+				link := &tile.Links[k]
+				if link.Edge == uint8(j) {
+					if link.Ref != 0 {
+						var neiTile *DtMeshTile
+						var neiPoly *DtPoly
+						this.m_nav.GetTileAndPolyByRefUnsafe(link.Ref, &neiTile, &neiPoly)
+						if filter.PassFilter(link.Ref, neiTile, neiPoly) {
+							insertInterval(ints[:], &nints, MAX_INTERVAL, int16(link.Bmin), int16(link.Bmax), link.Ref)
+						}
+					}
+				}
+			}
+		} else {
+			// Internal edge
+			var neiRef DtPolyRef
+			if poly.Neis[j] != 0 {
+				idx := (uint32)(poly.Neis[j] - 1)
+				neiRef = this.m_nav.GetPolyRefBase(tile) | DtPolyRef(idx)
+				if !filter.PassFilter(neiRef, tile, &tile.Polys[idx]) {
+					neiRef = 0
+				}
+			}
+
+			// If the edge leads to another polygon and portals are not stored, skip.
+			if neiRef != 0 && !storePortals {
+				continue
+			}
+			if n < maxSegments {
+				vj := tile.Verts[poly.Verts[j]*3:]
+				vi := tile.Verts[poly.Verts[i]*3:]
+				seg := segmentVerts[n*6:]
+				DtVcopy(seg[0:], vj)
+				DtVcopy(seg[3:], vi)
+				if segmentRefs != nil {
+					segmentRefs[n] = neiRef
+				}
+				n++
+			} else {
+				status |= DT_BUFFER_TOO_SMALL
+			}
+
+			continue
+		}
+
+		// Add sentinels
+		insertInterval(ints[:], &nints, MAX_INTERVAL, -1, 0, 0)
+		insertInterval(ints[:], &nints, MAX_INTERVAL, 255, 256, 0)
+
+		// Store segments.
+		vj := tile.Verts[poly.Verts[j]*3:]
+		vi := tile.Verts[poly.Verts[i]*3:]
+		for k := 1; k < nints; k++ {
+			// Portal segment.
+			if storePortals && ints[k].ref != 0 {
+				tmin := ints[k].tmin / 255.0
+				tmax := ints[k].tmax / 255.0
+				if n < maxSegments {
+					seg := segmentVerts[n*6:]
+					DtVlerp(seg[0:], vj, vi, float32(tmin))
+					DtVlerp(seg[3:], vj, vi, float32(tmax))
+					if segmentRefs != nil {
+						segmentRefs[n] = ints[k].ref
+					}
+					n++
+				} else {
+					status |= DT_BUFFER_TOO_SMALL
+				}
+			}
+
+			// Wall segment.
+			imin := ints[k-1].tmax
+			imax := ints[k].tmin
+			if imin != imax {
+				tmin := imin / 255.0
+				tmax := imax / 255.0
+				if n < maxSegments {
+					seg := segmentVerts[n*6:]
+					DtVlerp(seg[0:], vj, vi, float32(tmin))
+					DtVlerp(seg[3:], vj, vi, float32(tmax))
+					if segmentRefs != nil {
+						segmentRefs[n] = 0
+					}
+					n++
+				} else {
+					status |= DT_BUFFER_TOO_SMALL
+				}
+			}
+		}
+	}
+
+	*segmentCount = n
+
+	return status
+}
+
+/// Finds the distance from the specified position to the nearest polygon wall.
+///  @param[in]		startRef		The reference id of the polygon containing @p centerPos.
+///  @param[in]		centerPos		The center of the search circle. [(x, y, z)]
+///  @param[in]		maxRadius		The radius of the search circle.
+///  @param[in]		filter			The polygon filter to apply to the query.
+///  @param[out]	hitDist			The distance to the nearest wall from @p centerPos.
+///  @param[out]	hitPos			The nearest position on the wall that was hit. [(x, y, z)]
+///  @param[out]	hitNormal		The normalized ray formed from the wall point to the
+///  								source point. [(x, y, z)]
+/// @returns The status flags for the query.
+/// @par
+///
+/// @p hitPos is not adjusted using the height detail data.
+///
+/// @p hitDist will equal the search radius if there is no wall within the
+/// radius. In this case the values of @p hitPos and @p hitNormal are
+/// undefined.
+///
+/// The normal will become unpredicable if @p hitDist is a very small number.
+///
+func (this *DtNavMeshQuery) FindDistanceToWall(startRef DtPolyRef, centerPos []float32, maxRadius float32,
+	filter *DtQueryFilter,
+	hitDist *float32, hitPos []float32, hitNormal []float32) DtStatus {
+	DtAssert(this.m_nav != nil)
+	DtAssert(this.m_nodePool != nil)
+	DtAssert(this.m_openList != nil)
+
+	// Validate input
+	if startRef == 0 || !this.m_nav.IsValidPolyRef(startRef) {
+		return DT_FAILURE | DT_INVALID_PARAM
+	}
+	this.m_nodePool.Clear()
+	this.m_openList.Clear()
+
+	startNode := this.m_nodePool.GetNode(startRef, 0)
+	DtVcopy(startNode.Pos[:], centerPos)
+	startNode.Pidx = 0
+	startNode.Cost = 0
+	startNode.Total = 0
+	startNode.Id = startRef
+	startNode.Flags = DT_NODE_OPEN
+	this.m_openList.Push(startNode)
+
+	radiusSqr := DtSqrFloat32(maxRadius)
+
+	status := DT_SUCCESS
+
+	for !this.m_openList.Empty() {
+		bestNode := this.m_openList.Pop()
+		bestNode.Flags &= ^DT_NODE_OPEN
+		bestNode.Flags |= DT_NODE_CLOSED
+
+		// Get poly and tile.
+		// The API input has been cheked already, skip checking internal data.
+		bestRef := bestNode.Id
+		var bestTile *DtMeshTile
+		var bestPoly *DtPoly
+		this.m_nav.GetTileAndPolyByRefUnsafe(bestRef, &bestTile, &bestPoly)
+
+		// Get parent poly and tile.
+		var parentRef DtPolyRef
+		var parentTile *DtMeshTile
+		var parentPoly *DtPoly
+		if bestNode.Pidx != 0 {
+			parentRef = this.m_nodePool.GetNodeAtIdx(bestNode.Pidx).Id
+		}
+		if parentRef != 0 {
+			this.m_nav.GetTileAndPolyByRefUnsafe(parentRef, &parentTile, &parentPoly)
+		}
+		// Hit test walls.
+		for i, j := 0, (int)(bestPoly.VertCount-1); i < (int)(bestPoly.VertCount); j, i = i, i+1 {
+			// Skip non-solid edges.
+			if (bestPoly.Neis[j] & DT_EXT_LINK) != 0 {
+				// Tile border.
+				solid := true
+				for k := bestPoly.FirstLink; k != DT_NULL_LINK; k = bestTile.Links[k].Next {
+					link := &bestTile.Links[k]
+					if link.Edge == uint8(j) {
+						if link.Ref != 0 {
+							var neiTile *DtMeshTile
+							var neiPoly *DtPoly
+							this.m_nav.GetTileAndPolyByRefUnsafe(link.Ref, &neiTile, &neiPoly)
+							if filter.PassFilter(link.Ref, neiTile, neiPoly) {
+								solid = false
+							}
+						}
+						break
+					}
+				}
+				if !solid {
+					continue
+				}
+			} else if bestPoly.Neis[j] != 0 {
+				// Internal edge
+				idx := (uint32)(bestPoly.Neis[j] - 1)
+				ref := this.m_nav.GetPolyRefBase(bestTile) | DtPolyRef(idx)
+				if filter.PassFilter(ref, bestTile, &bestTile.Polys[idx]) {
+					continue
+				}
+			}
+
+			// Calc distance to the edge.
+			vj := bestTile.Verts[bestPoly.Verts[j]*3:]
+			vi := bestTile.Verts[bestPoly.Verts[i]*3:]
+			var tseg float32
+			distSqr := DtDistancePtSegSqr2D(centerPos, vj, vi, &tseg)
+
+			// Edge is too far, skip.
+			if distSqr > radiusSqr {
+				continue
+			}
+			// Hit wall, update radius.
+			radiusSqr = distSqr
+			// Calculate hit pos.
+			hitPos[0] = vj[0] + (vi[0]-vj[0])*tseg
+			hitPos[1] = vj[1] + (vi[1]-vj[1])*tseg
+			hitPos[2] = vj[2] + (vi[2]-vj[2])*tseg
+		}
+
+		for i := bestPoly.FirstLink; i != DT_NULL_LINK; i = bestTile.Links[i].Next {
+			link := &bestTile.Links[i]
+			neighbourRef := link.Ref
+			// Skip invalid neighbours and do not follow back to parent.
+			if neighbourRef == 0 || neighbourRef == parentRef {
+				continue
+			}
+			// Expand to neighbour.
+			var neighbourTile *DtMeshTile
+			var neighbourPoly *DtPoly
+			this.m_nav.GetTileAndPolyByRefUnsafe(neighbourRef, &neighbourTile, &neighbourPoly)
+
+			// Skip off-mesh connections.
+			if neighbourPoly.GetType() == DT_POLYTYPE_OFFMESH_CONNECTION {
+				continue
+			}
+			// Calc distance to the edge.
+			va := bestTile.Verts[bestPoly.Verts[link.Edge]*3:]
+			vb := bestTile.Verts[bestPoly.Verts[(link.Edge+1)%bestPoly.VertCount]*3:]
+			var tseg float32
+			distSqr := DtDistancePtSegSqr2D(centerPos, va, vb, &tseg)
+
+			// If the circle is not touching the next polygon, skip it.
+			if distSqr > radiusSqr {
+				continue
+			}
+			if !filter.PassFilter(neighbourRef, neighbourTile, neighbourPoly) {
+				continue
+			}
+			neighbourNode := this.m_nodePool.GetNode(neighbourRef, 0)
+			if neighbourNode == nil {
+				status |= DT_OUT_OF_NODES
+				continue
+			}
+
+			if (neighbourNode.Flags & DT_NODE_CLOSED) != 0 {
+				continue
+			}
+
+			// Cost
+			if neighbourNode.Flags == 0 {
+				this.getEdgeMidPoint2(bestRef, bestPoly, bestTile,
+					neighbourRef, neighbourPoly, neighbourTile, neighbourNode.Pos[:])
+			}
+
+			total := bestNode.Total + DtVdist(bestNode.Pos[:], neighbourNode.Pos[:])
+
+			// The node is already in open list and the new result is worse, skip.
+			if (neighbourNode.Flags&DT_NODE_OPEN) != 0 && total >= neighbourNode.Total {
+				continue
+			}
+			neighbourNode.Id = neighbourRef
+			neighbourNode.Flags = (neighbourNode.Flags & ^DT_NODE_CLOSED)
+			neighbourNode.Pidx = this.m_nodePool.GetNodeIdx(bestNode)
+			neighbourNode.Total = total
+
+			if (neighbourNode.Flags & DT_NODE_OPEN) != 0 {
+				this.m_openList.Modify(neighbourNode)
+			} else {
+				neighbourNode.Flags |= DT_NODE_OPEN
+				this.m_openList.Push(neighbourNode)
+			}
+		}
+	}
+
+	// Calc hit normal.
+	DtVsub(hitNormal, centerPos, hitPos)
+	DtVnormalize(hitNormal)
+
+	*hitDist = DtMathSqrtf(radiusSqr)
+
+	return status
+}
+
+/// Returns true if the polygon reference is valid and passes the filter restrictions.
+///  @param[in]		ref			The polygon reference to check.
+///  @param[in]		filter		The filter to apply.
+func (this *DtNavMeshQuery) IsValidPolyRef(ref DtPolyRef, filter *DtQueryFilter) bool {
+	var tile *DtMeshTile
+	var poly *DtPoly
+	status := this.m_nav.GetTileAndPolyByRef(ref, &tile, &poly)
+	// If cannot get polygon, assume it does not exists and boundary is invalid.
+	if DtStatusFailed(status) {
+		return false
+	}
+	// If cannot pass filter, assume flags has changed and boundary is invalid.
+	if !filter.PassFilter(ref, tile, poly) {
+		return false
+	}
+	return true
+}
+
+/// Returns true if the polygon reference is in the closed list.
+///  @param[in]		ref		The reference id of the polygon to check.
+/// @returns True if the polygon is in closed list.
+/// @par
+///
+/// The closed list is the list of polygons that were fully evaluated during
+/// the last navigation graph search. (A* or Dijkstra)
+///
+func (this *DtNavMeshQuery) IsInClosedList(ref DtPolyRef) bool {
+	if this.m_nodePool == nil {
+		return false
+	}
+
+	var nodes [DT_MAX_STATES_PER_NODE]*DtNode
+	n := this.m_nodePool.FindNodes(ref, nodes[:], uint32(DT_MAX_STATES_PER_NODE))
+
+	for i := 0; i < int(n); i++ {
+		if (nodes[i].Flags & DT_NODE_CLOSED) != 0 {
+			return true
+		}
+	}
+
+	return false
+}
