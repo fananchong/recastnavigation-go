@@ -1,3 +1,9 @@
+/**
+@defgroup detour Detour
+
+Members in this module are wrappers around the standard math library
+*/
+
 package detour
 
 import "math"

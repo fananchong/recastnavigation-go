@@ -1,4 +1,4 @@
-// +build debug
+// +build !debug
 
 //
 // Copyright (c) 2009-2010 Mikko Mononen memon@inside.org
@@ -30,26 +30,15 @@ package detour
 ///  @see dtAssertFailSetCustom
 type DtAssertFailFunc func(expression bool)
 
-var sAssertFailFunc DtAssertFailFunc = nil
-
 /// Sets the base custom assertion failure function to be used by Detour.
 ///  @param[in]		assertFailFunc	The function to be invoked in case of failure of #dtAssert
 func DtAssertFailSetCustom(assertFailFunc DtAssertFailFunc) {
-	sAssertFailFunc = assertFailFunc
 }
 
 /// Gets the base custom assertion failure function to be used by Detour.
 func DtAssertFailGetCustom() DtAssertFailFunc {
-	return sAssertFailFunc
+	return nil
 }
 
 func DtAssert(expression bool) {
-	failFunc := DtAssertFailGetCustom()
-	if failFunc == nil {
-		if !expression {
-			panic("DtAssert")
-		}
-	} else if !expression {
-		failFunc(expression)
-	}
 }

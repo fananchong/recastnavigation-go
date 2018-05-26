@@ -1,3 +1,21 @@
+//
+// Copyright (c) 2009-2010 Mikko Mononen memon@inside.org
+//
+// This software is provided 'as-is', without any express or implied
+// warranty.  In no event will the authors be held liable for any damages
+// arising from the use of this software.
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+// 1. The origin of this software must not be misrepresented; you must not
+//    claim that you wrote the original software. If you use this software
+//    in a product, an acknowledgment in the product documentation would be
+//    appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//    misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
+//
+
 package detour
 
 import (
@@ -225,11 +243,11 @@ func (this *DtNavMesh) Init2(data []byte, dataSize int, flags DtTileFlags) DtSta
 }
 
 /// The navigation mesh initialization params.
+/// @par
+///
+/// @note The parameters are created automatically when the single tile
+/// initialization is performed.
 func (this *DtNavMesh) GetParams() *DtNavMeshParams {
-	/// @par
-	///
-	/// @note The parameters are created automatically when the single tile
-	/// initialization is performed.
 	return &this.m_params
 }
 
@@ -775,23 +793,24 @@ func (this *DtNavMesh) queryPolygonsInTile(tile *DtMeshTile, qmin, qmax []float3
 ///  @param[in]		lastRef		The desired reference for the tile. (When reloading a tile.) [opt] [Default: 0]
 ///  @param[out]	result		The tile reference. (If the tile was succesfully added.) [opt]
 /// @return The status flags for the operation.
-func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags, lastRef DtTileRef, result *DtTileRef) DtStatus {
-	/// @par
-	///
-	/// The add operation will fail if the data is in the wrong format, the allocated tile
-	/// space is full, or there is a tile already at the specified reference.
-	///
-	/// The lastRef parameter is used to restore a tile with the same tile
-	/// reference it had previously used.  In this case the #dtPolyRef's for the
-	/// tile will be restored to the same values they were before the tile was
-	/// removed.
-	///
-	/// The nav mesh assumes exclusive access to the data passed and will make
-	/// changes to the dynamic portion of the data. For that reason the data
-	/// should not be reused in other nav meshes until the tile has been successfully
-	/// removed from this nav mesh.
-	///
-	/// @see dtCreateNavMeshData, #removeTile
+/// @par
+///
+/// The add operation will fail if the data is in the wrong format, the allocated tile
+/// space is full, or there is a tile already at the specified reference.
+///
+/// The lastRef parameter is used to restore a tile with the same tile
+/// reference it had previously used.  In this case the #dtPolyRef's for the
+/// tile will be restored to the same values they were before the tile was
+/// removed.
+///
+/// The nav mesh assumes exclusive access to the data passed and will make
+/// changes to the dynamic portion of the data. For that reason the data
+/// should not be reused in other nav meshes until the tile has been successfully
+/// removed from this nav mesh.
+///
+/// @see dtCreateNavMeshData, #removeTile
+func (this *DtNavMesh) AddTile(data []byte, dataSize int, flags DtTileFlags,
+	lastRef DtTileRef, result *DtTileRef) DtStatus {
 
 	// Make sure the data is in right format.
 	if dataSize < DtAlign4(int(unsafe.Sizeof(DtMeshHeader{}))) {
@@ -1040,11 +1059,11 @@ func (this *DtNavMesh) GetNeighbourTilesAt(x, y int32, side int, tiles []*DtMesh
 ///  @param[out]	tiles		A pointer to an array of tiles that will hold the result.
 ///  @param[in]		maxTiles	The maximum tiles the tiles parameter can hold.
 /// @return The number of tiles returned in the tiles array.
+/// @par
+///
+/// This function will not fail if the tiles array is too small to hold the
+/// entire result set.  It will simply fill the array to capacity.
 func (this *DtNavMesh) GetTilesAt(x, y int32, tiles []*DtMeshTile, maxTiles int) int {
-	/// @par
-	///
-	/// This function will not fail if the tiles array is too small to hold the
-	/// entire result set.  It will simply fill the array to capacity.
 	n := 0
 
 	// Find tile based on hash.
@@ -1155,13 +1174,12 @@ func (this *DtNavMesh) GetTileAndPolyByRef(ref DtPolyRef, tile **DtMeshTile, pol
 ///  @param[in]		ref		A known valid reference for a polygon.
 ///  @param[out]	tile	The tile containing the polygon.
 ///  @param[out]	poly	The polygon.
+/// @par
+///
+/// @warning Only use this function if it is known that the provided polygon
+/// reference is valid. This function is faster than #getTileAndPolyByRef, but
+/// it does not validate the reference.
 func (this *DtNavMesh) GetTileAndPolyByRefUnsafe(ref DtPolyRef, tile **DtMeshTile, poly **DtPoly) {
-	/// @par
-	///
-	/// @warning Only use this function if it is known that the provided polygon
-	/// reference is valid. This function is faster than #getTileAndPolyByRef, but
-	/// it does not validate the reference.
-
 	var salt, it, ip uint32
 	this.DecodePolyId(ref, &salt, &it, &ip)
 	*tile = &(this.m_tiles[it])
@@ -1194,11 +1212,11 @@ func (this *DtNavMesh) IsValidPolyRef(ref DtPolyRef) bool {
 ///  @param[out]	data		Data associated with deleted tile.
 ///  @param[out]	dataSize	Size of the data associated with deleted tile.
 /// @return The status flags for the operation.
+/// @par
+///
+/// This function returns the data for the tile so that, if desired,
+/// it can be added back to the navigation mesh at a later point.
 func (this *DtNavMesh) RemoveTile(ref DtTileRef, data *[]byte, dataSize *int) DtStatus {
-	/// @par
-	///
-	/// This function returns the data for the tile so that, if desired,
-	/// it can be added back to the navigation mesh at a later point.
 	if ref == 0 {
 		return DT_FAILURE | DT_INVALID_PARAM
 	}
@@ -1310,22 +1328,21 @@ func (this *DtNavMesh) GetTileRef(tile *DtMeshTile) DtTileRef {
 /// Gets the polygon reference for the tile's base polygon.
 ///  @param[in]	tile		The tile.
 /// @return The polygon reference for the base polygon in the specified tile.
+/// @par
+///
+/// Example use case:
+/// @code
+///
+/// const dtPolyRef base = navmesh->getPolyRefBase(tile);
+/// for (int i = 0; i < tile->header->polyCount; ++i)
+/// {
+///     const dtPoly* p = &tile->polys[i];
+///     const dtPolyRef ref = base | (dtPolyRef)i;
+///
+///     // Use the reference to access the polygon data.
+/// }
+/// @endcode
 func (this *DtNavMesh) GetPolyRefBase(tile *DtMeshTile) DtPolyRef {
-	/// @par
-	///
-	/// Example use case:
-	/// @code
-	///
-	/// const dtPolyRef base = navmesh->getPolyRefBase(tile);
-	/// for (int i = 0; i < tile->header->polyCount; ++i)
-	/// {
-	///     const dtPoly* p = &tile->polys[i];
-	///     const dtPolyRef ref = base | (dtPolyRef)i;
-	///
-	///     // Use the reference to access the polygon data.
-	/// }
-	/// @endcode
-
 	if tile == nil {
 		return 0
 	}
@@ -1363,13 +1380,12 @@ func (this *DtNavMesh) GetTileStateSize(tile *DtMeshTile) int {
 ///  @param[out]	data			The buffer to store the tile's state in.
 ///  @param[in]		maxDataSize		The size of the data buffer. [Limit: >= #getTileStateSize]
 /// @return The status flags for the operation.
+/// @par
+///
+/// Tile state includes non-structural data such as polygon flags, area ids, etc.
+/// @note The state data is only valid until the tile reference changes.
+/// @see #getTileStateSize, #restoreTileState
 func (this *DtNavMesh) StoreTileState(tile *DtMeshTile, data []byte, maxDataSize int) DtStatus {
-	/// @par
-	///
-	/// Tile state includes non-structural data such as polygon flags, area ids, etc.
-	/// @note The state data is only valid until the tile reference changes.
-	/// @see #getTileStateSize, #restoreTileState
-
 	// Make sure there is enough space to store the state.
 	sizeReq := this.GetTileStateSize(tile)
 	if maxDataSize < sizeReq {
@@ -1404,13 +1420,12 @@ func (this *DtNavMesh) StoreTileState(tile *DtMeshTile, data []byte, maxDataSize
 ///  @param[in]	data			The new state. (Obtained from #storeTileState.)
 ///  @param[in]	maxDataSize		The size of the state within the data buffer.
 /// @return The status flags for the operation.
+/// @par
+///
+/// Tile state includes non-structural data such as polygon flags, area ids, etc.
+/// @note This function does not impact the tile's #dtTileRef and #dtPolyRef's.
+/// @see #storeTileState
 func (this *DtNavMesh) RestoreTileState(tile *DtMeshTile, data []byte, maxDataSize int) DtStatus {
-	/// @par
-	///
-	/// Tile state includes non-structural data such as polygon flags, area ids, etc.
-	/// @note This function does not impact the tile's #dtTileRef and #dtPolyRef's.
-	/// @see #storeTileState
-
 	// Make sure there is enough space to store the state.
 	sizeReq := this.GetTileStateSize(tile)
 	if maxDataSize < sizeReq {
@@ -1452,15 +1467,14 @@ func (this *DtNavMesh) RestoreTileState(tile *DtMeshTile, data []byte, maxDataSi
 ///  @param[out]	startPos	The start position of the off-mesh connection. [(x, y, z)]
 ///  @param[out]	endPos		The end position of the off-mesh connection. [(x, y, z)]
 /// @return The status flags for the operation.
+/// @par
+///
+/// Off-mesh connections are stored in the navigation mesh as special 2-vertex
+/// polygons with a single edge. At least one of the vertices is expected to be
+/// inside a normal polygon. So an off-mesh connection is "entered" from a
+/// normal polygon at one of its endpoints. This is the polygon identified by
+/// the prevRef parameter.
 func (this *DtNavMesh) GetOffMeshConnectionPolyEndPoints(prevRef, polyRef DtPolyRef, startPos, endPos []float32) DtStatus {
-	/// @par
-	///
-	/// Off-mesh connections are stored in the navigation mesh as special 2-vertex
-	/// polygons with a single edge. At least one of the vertices is expected to be
-	/// inside a normal polygon. So an off-mesh connection is "entered" from a
-	/// normal polygon at one of its endpoints. This is the polygon identified by
-	/// the prevRef parameter.
-
 	var salt, it, ip uint32
 
 	if polyRef == 0 {
