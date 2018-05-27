@@ -5,7 +5,7 @@
 
 
 
-float randValue[] ={
+float randValue[] = {
     0.001f,
     0.564f,
     0.193f,
@@ -147,7 +147,7 @@ float randValue[] ={
     0.550f,
 };
 
-int randIndex=0;
+int randIndex = 0;
 
 inline float frand()
 {
@@ -155,6 +155,8 @@ inline float frand()
     randIndex++;
     return v;
 }
+
+const int PATH_MAX_NODE = 2048;
 
 int main() {
     int errCode;
@@ -169,15 +171,35 @@ int main() {
     float startPos[3], endPos[3];
     dtPolyRef startRef, endRef;
 
+    printf("findRandomPoint ================================================\n");
     stat = query->findRandomPoint(&filter, frand, &startRef, startPos);
     assert(dtStatusSucceed(stat));
     stat = query->findRandomPoint(&filter, frand, &endRef, endPos);
     assert(dtStatusSucceed(stat));
-
     printf("startPos: %.2f %.2f %.2f\n", startPos[0], startPos[1], startPos[2]);
     printf("endPos: %.2f %.2f %.2f\n", endPos[0], endPos[1], endPos[2]);
     printf("startRef: %d\n", startRef);
     printf("endRef: %d\n", endRef);
+
+    printf("findNearestPoly ================================================\n");
+    float tempPos[3] = { 0,0,0 };
+    dtPolyRef nearestRef;
+    float nearestPos[3];
+    stat = query->findNearestPoly(tempPos, halfExtents, &filter, &nearestRef, nearestPos);
+    assert(dtStatusSucceed(stat));
+    printf("nearestPos: %.2f %.2f %.2f\n", nearestPos[0], nearestPos[1], nearestPos[2]);
+    printf("nearestRef: %d\n", nearestRef);
+
+    printf("findPath ================================================\n");
+    dtPolyRef path[PATH_MAX_NODE];
+    int pathCount;
+    stat = query->findPath(startRef, endRef, startPos, endPos, &filter, path, &pathCount, PATH_MAX_NODE);
+    assert(dtStatusSucceed(stat));
+    printf("pathCount: %d\n", pathCount);
+    for (int i=0; i<pathCount; i++) {
+        printf("%d\n", path[i]);
+    }
+    printf("\n");
 
     return 0;
 }

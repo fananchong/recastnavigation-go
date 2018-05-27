@@ -156,23 +156,46 @@ func frand() float32 {
 	return v
 }
 
+const PATH_MAX_NODE int = 2048
+
 func Test_main(t *testing.T) {
 	mesh := LoadStaticMesh("nav_test.obj.tile.bin")
 	query := CreateQuery(mesh, 2048)
 	filter := detour.DtAllocDtQueryFilter()
 
 	var stat detour.DtStatus
-	//halfExtents := [3]float32{2, 4, 2}
+	halfExtents := [3]float32{2, 4, 2}
 	var startPos, endPos [3]float32
 	var startRef, endRef detour.DtPolyRef
 
+	t.Logf("findRandomPoint ================================================\n")
 	stat = query.FindRandomPoint(filter, frand, &startRef, startPos[:])
 	detour.DtAssert(detour.DtStatusSucceed(stat))
 	stat = query.FindRandomPoint(filter, frand, &endRef, endPos[:])
 	detour.DtAssert(detour.DtStatusSucceed(stat))
-
 	t.Logf("startPos: %.2f %.2f %.2f", startPos[0], startPos[1], startPos[2])
 	t.Logf("endPos: %.2f %.2f %.2f", endPos[0], endPos[1], endPos[2])
 	t.Logf("startRef: %d", startRef)
 	t.Logf("endRef: %d", endRef)
+
+	t.Logf("findNearestPoly ================================================\n")
+	tempPos := [3]float32{0, 0, 0}
+	var nearestPos [3]float32
+	var nearestRef detour.DtPolyRef
+	stat = query.FindNearestPoly(tempPos[:], halfExtents[:], filter, &nearestRef, nearestPos[:])
+	detour.DtAssert(detour.DtStatusSucceed(stat))
+	t.Logf("nearestPos: %.2f %.2f %.2f\n", nearestPos[0], nearestPos[1], nearestPos[2])
+	t.Logf("nearestRef: %d\n", nearestRef)
+
+	t.Logf("findPath ================================================\n")
+	var path [PATH_MAX_NODE]detour.DtPolyRef
+	var pathCount int
+	stat = query.FindPath(startRef, endRef, startPos[:], endPos[:], filter, path[:], &pathCount, PATH_MAX_NODE)
+	detour.DtAssert(detour.DtStatusSucceed(stat))
+	t.Logf("pathCount: %d\n", pathCount)
+	for i := 0; i < pathCount; i++ {
+		t.Logf("%d\n", path[i])
+	}
+	t.Logf("\n")
+
 }
