@@ -9,9 +9,13 @@
 基于 recastnavigation git版本： 18562383f4c5cffa0678c709049340516ebc5e40
 
 
+## 已完成
+  
+  - 翻译 Detour 库
+  
+
 ## TODO
 
-  - 翻译 Detour 库
   - 翻译 DetourTileCache 库
 
   
