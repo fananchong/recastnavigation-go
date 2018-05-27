@@ -1,6 +1,10 @@
 set CURDIR=%~dp0
-set BASEDIR=%CURDIR:\src\github.com\fananchong\recastnavigation-go\=\%
+set BASEDIR=%CURDIR%\..\..\..\..\
 set GOPATH=%BASEDIR%
 echo %GOPATH%
-go test -tags debug -v ./tests/...
-REM go test -v ./tests/...
+
+cd tests\c\bin
+call ctest.exe rand
+call ctest.exe
+cd %CURDIR%
+go test -tags debug ./tests/...
