@@ -196,10 +196,48 @@ int main() {
     stat = query->findPath(startRef, endRef, startPos, endPos, &filter, path, &pathCount, PATH_MAX_NODE);
     assert(dtStatusSucceed(stat));
     printf("pathCount: %d\n", pathCount);
-    for (int i=0; i<pathCount; i++) {
+    for (int i = 0; i < pathCount; i++) {
         printf("%d\n", path[i]);
     }
     printf("\n");
+
+    {
+        printf("findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n");
+        float straightPath[PATH_MAX_NODE * 3];
+        unsigned char straightPathFlags[PATH_MAX_NODE];
+        dtPolyRef straightPathRefs[PATH_MAX_NODE];
+        int straightPathCount;
+        stat = query->findStraightPath(startPos, endPos, path, pathCount,
+            straightPath, straightPathFlags, straightPathRefs,
+            &straightPathCount, PATH_MAX_NODE, DT_STRAIGHTPATH_AREA_CROSSINGS);
+        assert(dtStatusSucceed(stat));
+        printf("straightPathCount: %d\n", straightPathCount);
+        for (int i = 0; i < straightPathCount; i++) {
+            printf("straightPath: %.3f %.3f %.3f, straightPathFlags: %d, straightPathRefs: %d\n",
+                straightPath[i * 3 + 0], straightPath[i * 3 + 1], straightPath[i * 3 + 2],
+                straightPathFlags[i], straightPathRefs[i]);
+        }
+        printf("\n");
+    }
+
+    {
+        printf("findStraightPath # DT_STRAIGHTPATH_ALL_CROSSINGS ================================================\n");
+        float straightPath[PATH_MAX_NODE * 3];
+        unsigned char straightPathFlags[PATH_MAX_NODE];
+        dtPolyRef straightPathRefs[PATH_MAX_NODE];
+        int straightPathCount;
+        stat = query->findStraightPath(startPos, endPos, path, pathCount,
+            straightPath, straightPathFlags, straightPathRefs,
+            &straightPathCount, PATH_MAX_NODE, DT_STRAIGHTPATH_ALL_CROSSINGS);
+        assert(dtStatusSucceed(stat));
+        printf("straightPathCount: %d\n", straightPathCount);
+        for (int i = 0; i < straightPathCount; i++) {
+            printf("straightPath: %.3f %.3f %.3f, straightPathFlags: %d, straightPathRefs: %d\n",
+                straightPath[i * 3 + 0], straightPath[i * 3 + 1], straightPath[i * 3 + 2],
+                straightPathFlags[i], straightPathRefs[i]);
+        }
+        printf("\n");
+    }
 
     return 0;
 }

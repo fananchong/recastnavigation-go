@@ -198,4 +198,42 @@ func Test_main(t *testing.T) {
 	}
 	t.Logf("\n")
 
+	{
+		t.Logf("findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n")
+		var straightPath [PATH_MAX_NODE * 3]float32
+		var straightPathFlags [PATH_MAX_NODE]detour.DtStraightPathFlags
+		var straightPathRefs [PATH_MAX_NODE]detour.DtPolyRef
+		var straightPathCount int
+		stat = query.FindStraightPath(startPos[:], endPos[:], path[:], pathCount,
+			straightPath[:], straightPathFlags[:], straightPathRefs[:],
+			&straightPathCount, PATH_MAX_NODE, detour.DT_STRAIGHTPATH_AREA_CROSSINGS)
+		detour.DtAssert(detour.DtStatusSucceed(stat))
+		t.Logf("straightPathCount: %d\n", straightPathCount)
+		for i := 0; i < straightPathCount; i++ {
+			t.Logf("straightPath: %.3f %.3f %.3f, straightPathFlags: %d, straightPathRefs: %d\n",
+				straightPath[i*3+0], straightPath[i*3+1], straightPath[i*3+2],
+				straightPathFlags[i], straightPathRefs[i])
+		}
+		t.Logf("\n")
+	}
+
+	{
+		t.Logf("findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n")
+		var straightPath [PATH_MAX_NODE * 3]float32
+		var straightPathFlags [PATH_MAX_NODE]detour.DtStraightPathFlags
+		var straightPathRefs [PATH_MAX_NODE]detour.DtPolyRef
+		var straightPathCount int
+		stat = query.FindStraightPath(startPos[:], endPos[:], path[:], pathCount,
+			straightPath[:], straightPathFlags[:], straightPathRefs[:],
+			&straightPathCount, PATH_MAX_NODE, detour.DT_STRAIGHTPATH_ALL_CROSSINGS)
+		detour.DtAssert(detour.DtStatusSucceed(stat))
+		t.Logf("straightPathCount: %d\n", straightPathCount)
+		for i := 0; i < straightPathCount; i++ {
+			t.Logf("straightPath: %.3f %.3f %.3f, straightPathFlags: %d, straightPathRefs: %d\n",
+				straightPath[i*3+0], straightPath[i*3+1], straightPath[i*3+2],
+				straightPathFlags[i], straightPathRefs[i])
+		}
+		t.Logf("\n")
+	}
+
 }
