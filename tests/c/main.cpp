@@ -256,7 +256,7 @@ int main() {
     }
     printf("\n");
 
-    printf("================================================ findDistanceToWall ================================================\n");
+    printf("================================================ findDistanceToWall # 0================================================\n");
     float hitDist;
     float hitPos[3];
     float hitNormal[3];
@@ -267,5 +267,52 @@ int main() {
     printf("hitNormal: %.2f %.2f %.2f\n", hitNormal[0], hitNormal[1], hitNormal[2]);
     printf("\n");
 
+    {
+        printf("================================================ SlicedFindPath # 0================================================\n");
+        stat = query->initSlicedFindPath(startRef, endRef, startPos, endPos, &filter, 0);
+        assert(dtStatusInProgress(stat) || dtStatusSucceed(stat));
+        for (;true;) {
+
+            if (dtStatusInProgress(stat)) {
+                int doneIters;
+                stat = query->updateSlicedFindPath(4, &doneIters);
+            }
+            if (dtStatusSucceed(stat)) {
+                dtPolyRef path[PATH_MAX_NODE];
+                int pathCount;
+                stat = query->finalizeSlicedFindPath(path, &pathCount, PATH_MAX_NODE);
+                printf("pathCount: %d\n", pathCount);
+                for (int i = 0; i < pathCount; i++) {
+                    printf("%d\n", path[i]);
+                }
+                break;
+            }
+        }
+        printf("\n");
+    }
+
+    {
+        printf("================================================ SlicedFindPath # DT_FINDPATH_ANY_ANGLE ================================================\n");
+        stat = query->initSlicedFindPath(startRef, endRef, startPos, endPos, &filter, DT_FINDPATH_ANY_ANGLE);
+        assert(dtStatusInProgress(stat) || dtStatusSucceed(stat));
+        for (;true;) {
+
+            if (dtStatusInProgress(stat)) {
+                int doneIters;
+                stat = query->updateSlicedFindPath(4, &doneIters);
+            }
+            if (dtStatusSucceed(stat)) {
+                dtPolyRef path[PATH_MAX_NODE];
+                int pathCount;
+                stat = query->finalizeSlicedFindPath(path, &pathCount, PATH_MAX_NODE);
+                printf("pathCount: %d\n", pathCount);
+                for (int i = 0; i < pathCount; i++) {
+                    printf("%d\n", path[i]);
+                }
+                break;
+            }
+        }
+        printf("\n");
+    }
     return 0;
 }

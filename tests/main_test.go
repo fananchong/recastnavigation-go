@@ -264,4 +264,50 @@ func Test_main(t *testing.T) {
 	t.Logf("hitNormal: %.2f %.2f %.2f\n", hitNormal[0], hitNormal[1], hitNormal[2])
 	t.Logf("\n")
 
+	{
+		t.Logf("================================================ SlicedFindPath # 0================================================\n")
+		stat = query.InitSlicedFindPath(startRef, endRef, startPos[:], endPos[:], filter, 0)
+		detour.DtAssert(detour.DtStatusInProgress(stat) || detour.DtStatusSucceed(stat))
+		for {
+			if detour.DtStatusInProgress(stat) {
+				var doneIters int
+				stat = query.UpdateSlicedFindPath(4, &doneIters)
+			}
+			if detour.DtStatusSucceed(stat) {
+				var path [PATH_MAX_NODE]detour.DtPolyRef
+				var pathCount int
+				stat = query.FinalizeSlicedFindPath(path[:], &pathCount, PATH_MAX_NODE)
+				t.Logf("pathCount: %d\n", pathCount)
+				for i := 0; i < pathCount; i++ {
+					t.Logf("%d\n", path[i])
+				}
+				break
+			}
+		}
+		t.Logf("\n")
+	}
+
+	{
+		t.Logf("================================================ SlicedFindPath # DT_FINDPATH_ANY_ANGLE ================================================\n")
+		stat = query.InitSlicedFindPath(startRef, endRef, startPos[:], endPos[:], filter, detour.DT_FINDPATH_ANY_ANGLE)
+		detour.DtAssert(detour.DtStatusInProgress(stat) || detour.DtStatusSucceed(stat))
+		for {
+			if detour.DtStatusInProgress(stat) {
+				var doneIters int
+				stat = query.UpdateSlicedFindPath(4, &doneIters)
+			}
+			if detour.DtStatusSucceed(stat) {
+				var path [PATH_MAX_NODE]detour.DtPolyRef
+				var pathCount int
+				stat = query.FinalizeSlicedFindPath(path[:], &pathCount, PATH_MAX_NODE)
+				t.Logf("pathCount: %d\n", pathCount)
+				for i := 0; i < pathCount; i++ {
+					t.Logf("%d\n", path[i])
+				}
+				break
+			}
+		}
+		t.Logf("\n")
+	}
+
 }
