@@ -168,7 +168,7 @@ func Test_main(t *testing.T) {
 	var startPos, endPos [3]float32
 	var startRef, endRef detour.DtPolyRef
 
-	t.Logf("findRandomPoint ================================================\n")
+	t.Logf("================================================ findRandomPoint ================================================\n")
 	stat = query.FindRandomPoint(filter, frand, &startRef, startPos[:])
 	detour.DtAssert(detour.DtStatusSucceed(stat))
 	stat = query.FindRandomPoint(filter, frand, &endRef, endPos[:])
@@ -177,8 +177,9 @@ func Test_main(t *testing.T) {
 	t.Logf("endPos: %.2f %.2f %.2f", endPos[0], endPos[1], endPos[2])
 	t.Logf("startRef: %d", startRef)
 	t.Logf("endRef: %d", endRef)
+	t.Logf("\n")
 
-	t.Logf("findNearestPoly ================================================\n")
+	t.Logf("================================================ findNearestPoly ================================================\n")
 	tempPos := [3]float32{0, 0, 0}
 	var nearestPos [3]float32
 	var nearestRef detour.DtPolyRef
@@ -186,8 +187,9 @@ func Test_main(t *testing.T) {
 	detour.DtAssert(detour.DtStatusSucceed(stat))
 	t.Logf("nearestPos: %.2f %.2f %.2f\n", nearestPos[0], nearestPos[1], nearestPos[2])
 	t.Logf("nearestRef: %d\n", nearestRef)
+	t.Logf("\n")
 
-	t.Logf("findPath ================================================\n")
+	t.Logf("================================================ findPath ================================================\n")
 	var path [PATH_MAX_NODE]detour.DtPolyRef
 	var pathCount int
 	stat = query.FindPath(startRef, endRef, startPos[:], endPos[:], filter, path[:], &pathCount, PATH_MAX_NODE)
@@ -199,7 +201,7 @@ func Test_main(t *testing.T) {
 	t.Logf("\n")
 
 	{
-		t.Logf("findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n")
+		t.Logf("================================================ findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n")
 		var straightPath [PATH_MAX_NODE * 3]float32
 		var straightPathFlags [PATH_MAX_NODE]detour.DtStraightPathFlags
 		var straightPathRefs [PATH_MAX_NODE]detour.DtPolyRef
@@ -218,7 +220,7 @@ func Test_main(t *testing.T) {
 	}
 
 	{
-		t.Logf("findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n")
+		t.Logf("================================================ findStraightPath # DT_STRAIGHTPATH_ALL_CROSSINGS ================================================\n")
 		var straightPath [PATH_MAX_NODE * 3]float32
 		var straightPathFlags [PATH_MAX_NODE]detour.DtStraightPathFlags
 		var straightPathRefs [PATH_MAX_NODE]detour.DtPolyRef
@@ -235,5 +237,20 @@ func Test_main(t *testing.T) {
 		}
 		t.Logf("\n")
 	}
+
+	t.Logf("================================================ moveAlongSurface ================================================\n")
+	var resultPos [3]float32
+	var visited [PATH_MAX_NODE]detour.DtPolyRef
+	var visitedCount int
+	bHit := false
+	stat = query.MoveAlongSurface(startRef, startPos[:], endPos[:], filter, resultPos[:], visited[:], &visitedCount, PATH_MAX_NODE, &bHit)
+	detour.DtAssert(detour.DtStatusSucceed(stat))
+	t.Logf("resultPos: %.2f %.2f %.2f\n", resultPos[0], resultPos[1], resultPos[2])
+	t.Log("bHit: ", bHit)
+	t.Logf("visitedCount: %d\n", visitedCount)
+	for i := 0; i < visitedCount; i++ {
+		t.Logf("%d\n", visited[i])
+	}
+	t.Logf("\n")
 
 }

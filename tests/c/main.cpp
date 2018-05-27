@@ -171,7 +171,7 @@ int main() {
     float startPos[3], endPos[3];
     dtPolyRef startRef, endRef;
 
-    printf("findRandomPoint ================================================\n");
+    printf("================================================ findRandomPoint ================================================\n");
     stat = query->findRandomPoint(&filter, frand, &startRef, startPos);
     assert(dtStatusSucceed(stat));
     stat = query->findRandomPoint(&filter, frand, &endRef, endPos);
@@ -180,8 +180,9 @@ int main() {
     printf("endPos: %.2f %.2f %.2f\n", endPos[0], endPos[1], endPos[2]);
     printf("startRef: %d\n", startRef);
     printf("endRef: %d\n", endRef);
+    printf("\n");
 
-    printf("findNearestPoly ================================================\n");
+    printf("================================================ findNearestPoly ================================================\n");
     float tempPos[3] = { 0,0,0 };
     dtPolyRef nearestRef;
     float nearestPos[3];
@@ -189,8 +190,9 @@ int main() {
     assert(dtStatusSucceed(stat));
     printf("nearestPos: %.2f %.2f %.2f\n", nearestPos[0], nearestPos[1], nearestPos[2]);
     printf("nearestRef: %d\n", nearestRef);
+    printf("\n");
 
-    printf("findPath ================================================\n");
+    printf("================================================ findPath ================================================\n");
     dtPolyRef path[PATH_MAX_NODE];
     int pathCount;
     stat = query->findPath(startRef, endRef, startPos, endPos, &filter, path, &pathCount, PATH_MAX_NODE);
@@ -202,7 +204,7 @@ int main() {
     printf("\n");
 
     {
-        printf("findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n");
+        printf("================================================ findStraightPath # DT_STRAIGHTPATH_AREA_CROSSINGS ================================================\n");
         float straightPath[PATH_MAX_NODE * 3];
         unsigned char straightPathFlags[PATH_MAX_NODE];
         dtPolyRef straightPathRefs[PATH_MAX_NODE];
@@ -221,7 +223,7 @@ int main() {
     }
 
     {
-        printf("findStraightPath # DT_STRAIGHTPATH_ALL_CROSSINGS ================================================\n");
+        printf("================================================ findStraightPath # DT_STRAIGHTPATH_ALL_CROSSINGS ================================================\n");
         float straightPath[PATH_MAX_NODE * 3];
         unsigned char straightPathFlags[PATH_MAX_NODE];
         dtPolyRef straightPathRefs[PATH_MAX_NODE];
@@ -238,6 +240,21 @@ int main() {
         }
         printf("\n");
     }
+
+    printf("================================================ moveAlongSurface ================================================\n");
+    float resultPos[3];
+    dtPolyRef visited[PATH_MAX_NODE];
+    int visitedCount;
+    bool bHit;
+    stat = query->moveAlongSurface(startRef, startPos, endPos, &filter, resultPos, visited, &visitedCount, PATH_MAX_NODE, bHit);
+    assert(dtStatusSucceed(stat));
+    printf("resultPos: %.2f %.2f %.2f\n", resultPos[0], resultPos[1], resultPos[2]);
+    printf("bHit: %d\n", bHit);
+    printf("visitedCount: %d\n", visitedCount);
+    for (int i = 0; i < visitedCount; i++) {
+        printf("%d\n", visited[i]);
+    }
+    printf("\n");
 
     return 0;
 }
