@@ -1,0 +1,6 @@
+/obj
+/.vs
+/*.sln
+/*.vcxproj
+/*.filters
+/*.user
