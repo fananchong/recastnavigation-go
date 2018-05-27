@@ -253,4 +253,15 @@ func Test_main(t *testing.T) {
 	}
 	t.Logf("\n")
 
+	t.Logf("================================================ findDistanceToWall ================================================\n")
+	var hitDist float32
+	var hitPos [3]float32
+	var hitNormal [3]float32
+	stat = query.FindDistanceToWall(startRef, startPos[:], 30, filter, &hitDist, hitPos[:], hitNormal[:])
+	detour.DtAssert(detour.DtStatusSucceed(stat))
+	t.Logf("hitPos: %.2f %.2f %.2f\n", hitPos[0], hitPos[1], hitPos[2])
+	t.Logf("hitDist: %f\n", hitDist)
+	t.Logf("hitNormal: %.2f %.2f %.2f\n", hitNormal[0], hitNormal[1], hitNormal[2])
+	t.Logf("\n")
+
 }

@@ -256,5 +256,16 @@ int main() {
     }
     printf("\n");
 
+    printf("================================================ findDistanceToWall ================================================\n");
+    float hitDist;
+    float hitPos[3];
+    float hitNormal[3];
+    stat = query->findDistanceToWall(startRef, startPos, 30, &filter, &hitDist, hitPos, hitNormal);
+    assert(dtStatusSucceed(stat));
+    printf("hitPos: %.2f %.2f %.2f\n", hitPos[0], hitPos[1], hitPos[2]);
+    printf("hitDist: %f\n", hitDist);
+    printf("hitNormal: %.2f %.2f %.2f\n", hitNormal[0], hitNormal[1], hitNormal[2]);
+    printf("\n");
+
     return 0;
 }
