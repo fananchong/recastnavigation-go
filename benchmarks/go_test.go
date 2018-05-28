@@ -15,9 +15,9 @@ const PATH_MAX_NODE int = 2048
 
 var tempdata, err = ioutil.ReadFile("../tests/randpos.bin")
 var mesh = tests.LoadStaticMesh("../tests/nav_test.obj.tile.bin")
+var randPosValue []float32
 
 func Benchmark_GO_FindPath(t *testing.B) {
-	var randPosValue [RAND_MAX_COUNT * 4]float32
 	var randPosIndex int = 0
 
 	getPos := func(ref *detour.DtPolyRef, pos []float32) {
@@ -28,7 +28,6 @@ func Benchmark_GO_FindPath(t *testing.B) {
 		randPosIndex++
 	}
 
-	detour.DtAssert(err == nil)
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&randPosValue)))
 	sliceHeader.Cap = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
 	sliceHeader.Len = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
@@ -39,7 +38,6 @@ func Benchmark_GO_FindPath(t *testing.B) {
 
 	for i := 0; i < t.N; i++ {
 		var stat detour.DtStatus
-		//halfExtents := [3]float32{2, 4, 2}
 		startPos := [3]float32{0, 0, 0}
 		endPos := [3]float32{0, 0, 0}
 		var startRef detour.DtPolyRef
@@ -76,7 +74,6 @@ func Benchmark_GO_MoveAlongSurface(t *testing.B) {
 
 	for i := 0; i < t.N; i++ {
 		var stat detour.DtStatus
-		//halfExtents := [3]float32{2, 4, 2}
 		startPos := [3]float32{0, 0, 0}
 		endPos := [3]float32{0, 0, 0}
 		var startRef detour.DtPolyRef

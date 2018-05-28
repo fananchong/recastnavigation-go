@@ -10,7 +10,7 @@ long long get_tick_count(void)
 }
 
 
-const int RAND_MAX_COUNT = 2000000;
+const int RAND_MAX_COUNT = 200000;
 float randPosValue[RAND_MAX_COUNT * 4];
 int randPosIndex = 0;
 inline void getPos(dtPolyRef& ref, float pos[3])
