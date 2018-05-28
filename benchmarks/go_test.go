@@ -52,7 +52,6 @@ func Benchmark_GO_FindPath(t *testing.B) {
 }
 
 func Benchmark_GO_MoveAlongSurface(t *testing.B) {
-	var randPosValue [RAND_MAX_COUNT * 4]float32
 	var randPosIndex int = 0
 
 	getPos := func(ref *detour.DtPolyRef, pos []float32) {
