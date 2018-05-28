@@ -58,7 +58,7 @@ int main() {
         assert(dtStatusSucceed(stat));
     }
     auto t2 = get_tick_count();
-    printf("findPath cost:        %12lldns %12.3fns/op %12.3fms/op\n",
+    printf("findPath cost:        %20lldns %20.3fns/op %20.3fms/op\n",
         t2 - t1, float(t2 - t1) / count, float(t2 - t1) / count / 1000000);
 
     randPosIndex = 0;
@@ -81,6 +81,6 @@ int main() {
         assert(dtStatusSucceed(stat));
     }
     t2 = get_tick_count();
-    printf("moveAlongSurface cost:%12lldns %12.3fns/op %12.3fms/op\n",
+    printf("moveAlongSurface cost:%20lldns %20.3fns/op %20.3fms/op\n",
         t2 - t1, float(t2 - t1) / count, float(t2 - t1) / count / 1000000);
 }
