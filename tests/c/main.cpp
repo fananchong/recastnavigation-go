@@ -4,7 +4,7 @@
 #include <vector>
 #include <time.h>
 
-const int RAND_MAX_COUNT = 200000;
+const int RAND_MAX_COUNT = 20000000;
 float randValue[RAND_MAX_COUNT];
 int randIndex = 0;
 inline float frand()
