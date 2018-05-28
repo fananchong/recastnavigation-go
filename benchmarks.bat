@@ -1,9 +1,12 @@
 set CURDIR=%~dp0
-set BASEDIR=%CURDIR:\src\github.com\fananchong\recastnavigation-go\=\%
+set BASEDIR=%CURDIR%\..\..\..\..\
 set GOPATH=%BASEDIR%
 echo %GOPATH%
 
-cd benchmarks
+cd tests\c\bin
+call cbenchmark.exe
+
+cd %CURDIR%\benchmarks
 call go test -test.bench=".*" -count=1
 
 cd %CURDIR%
