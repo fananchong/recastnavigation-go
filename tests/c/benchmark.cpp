@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cassert>
 #include "detour.h"
+#include <stdio.h>
 
 long long get_tick_count(void)
 {
