@@ -1009,3 +1009,7 @@ func MemsetUInt16(dst []uint16, val uint16) {
 		dst[i] = val
 	}
 }
+
+func SliceSizeFromPointer(p, start unsafe.Pointer, eleSize uintptr) uint32 {
+	return uint32((uintptr(p) - uintptr(start)) / eleSize)
+}
