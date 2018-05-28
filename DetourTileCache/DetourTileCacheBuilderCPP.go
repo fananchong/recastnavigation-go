@@ -1985,7 +1985,7 @@ func dtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, cen
 }
 
 func dtBuildTileCacheLayer(comp DtTileCacheCompressor, header *DtTileCacheLayerHeader, heights, areas, cons []uint8) (status detour.DtStatus, outData []uint8, outDataSize int32) {
-	headerSize := int32(detour.DtAlign4(int(unsafe.Sizeof(DtTileCacheLayerHeader{}))))
+	headerSize := int32(detour.DtAlign4(int(DtTileCacheLayerHeaderSize)))
 	gridSize := int32(header.width) * int32(header.height)
 	maxDataSize := headerSize + comp.MaxCompressedSize(gridSize*3)
 	data := make([]uint8, maxDataSize)
@@ -2038,7 +2038,7 @@ func dtDecompressTileCacheLayer(comp DtTileCacheCompressor, compressed []uint8, 
 		return
 	}
 
-	headerSize := int32(detour.DtAlign4(int(unsafe.Sizeof(DtTileCacheLayerHeader{}))))
+	headerSize := int32(detour.DtAlign4(int(DtTileCacheLayerHeaderSize)))
 	gridSize := int32(compressedHeader.width) * int32(compressedHeader.height)
 
 	header := &DtTileCacheLayerHeader{}

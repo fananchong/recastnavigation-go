@@ -1,19 +1,19 @@
 package dtcache
 
 import (
-	_ "github.com/fananchong/recastnavigation-go/Detour"
+	detour "github.com/fananchong/recastnavigation-go/Detour"
 )
 
-type dtObstacleRef uint32
+type DtObstacleRef uint32
 
-type dtCompressedTileRef uint32
+type DtCompressedTileRef uint32
 
 /// Flags for addTile
 const (
 	DT_COMPRESSEDTILE_FREE_DATA = 0x01 ///< Navmesh owns the tile memory and should free it.
 )
 
-type dtCompressedTile struct {
+type DtCompressedTile struct {
 	salt           uint32 ///< Counter describing modifications to the tile.
 	header         *DtTileCacheLayerHeader
 	compressed     []uint8
@@ -21,7 +21,7 @@ type dtCompressedTile struct {
 	data           []uint8
 	dataSize       int32
 	flags          uint32
-	next           *dtCompressedTile
+	next           *DtCompressedTile
 }
 
 const (
@@ -35,18 +35,18 @@ const (
 	DT_OBSTACLE_ORIENTED_BOX int32 = 2 // OBB
 )
 
-type dtObstacleCylinder struct {
+type DtObstacleCylinder struct {
 	pos    [3]float32
 	radius float32
 	height float32
 }
 
-type dtObstacleBox struct {
+type DtObstacleBox struct {
 	bmin [3]float32
 	bmax [3]float32
 }
 
-type dtObstacleOrientedBox struct {
+type DtObstacleOrientedBox struct {
 	center      [3]float32
 	halfExtents [3]float32
 	rotAux      [2]float32 //{ cos(0.5f*angle)*sin(-0.5f*angle); cos(0.5f*angle)*cos(0.5f*angle) - 0.5 }
@@ -54,22 +54,22 @@ type dtObstacleOrientedBox struct {
 
 const DT_MAX_TOUCHED_TILES int32 = 8
 
-type dtTileCacheObstacle struct {
-	cylinder    dtObstacleCylinder
-	box         dtObstacleBox
-	orientedBox dtObstacleOrientedBox
+type DtTileCacheObstacle struct {
+	cylinder    DtObstacleCylinder
+	box         DtObstacleBox
+	orientedBox DtObstacleOrientedBox
 
-	touched  [DT_MAX_TOUCHED_TILES]dtCompressedTileRef
-	pending  [DT_MAX_TOUCHED_TILES]dtCompressedTileRef
+	touched  [DT_MAX_TOUCHED_TILES]DtCompressedTileRef
+	pending  [DT_MAX_TOUCHED_TILES]DtCompressedTileRef
 	salt     uint16
 	_type    uint8
 	state    uint8
 	ntouched uint8
 	npending uint8
-	next     *dtTileCacheObstacle
+	next     *DtTileCacheObstacle
 }
 
-type dtTileCacheParams struct {
+type DtTileCacheParams struct {
 	orig                   [3]float32
 	cs                     float32
 	ch                     float32
@@ -83,164 +83,81 @@ type dtTileCacheParams struct {
 	maxObstacles           int32
 }
 
-// type dtTileCacheMeshProcess interface {
-// 	DtFreeTileCacheMeshProcess()
+type DtTileCacheMeshProcess interface {
+	DtFreeTileCacheMeshProcess()
 
-// 	process(params *detour.DtNavMeshCreateParams,
-// 						 unsigned char* polyAreas, unsigned short* polyFlags)
-// };
+	process(params *detour.DtNavMeshCreateParams, polyAreas []uint8, polyFlags []uint16)
+}
 
-// class dtTileCache
-// {
-// public:
-// 	dtTileCache();
-// 	~dtTileCache();
+const MAX_REQUESTS int32 = 64
+const MAX_UPDATE int32 = 64
 
-// 	struct dtTileCacheAlloc* getAlloc() { return m_talloc; }
-// 	struct dtTileCacheCompressor* getCompressor() { return m_tcomp; }
-// 	const dtTileCacheParams* getParams() const { return &m_params; }
+const REQUEST_ADD int32 = 0
+const REQUEST_REMOVE int32 = 1
 
-// 	inline int getTileCount() const { return m_params.maxTiles; }
-// 	inline const dtCompressedTile* getTile(const int i) const { return &m_tiles[i]; }
+type ObstacleRequest struct {
+	action int32
+	ref    DtObstacleRef
+}
 
-// 	inline int getObstacleCount() const { return m_params.maxObstacles; }
-// 	inline const dtTileCacheObstacle* getObstacle(const int i) const { return &m_obstacles[i]; }
+type DtTileCache struct {
+	m_tileLutSize int32 ///< Tile hash lookup size (must be pot).
+	m_tileLutMask int32 ///< Tile hash lookup mask.
 
-// 	const dtTileCacheObstacle* getObstacleByRef(dtObstacleRef ref);
+	m_posLookup    []*DtCompressedTile ///< Tile hash lookup.
+	m_nextFreeTile *DtCompressedTile   ///< Freelist of tiles.
+	m_tiles        []DtCompressedTile  ///< List of tiles.
 
-// 	dtObstacleRef getObstacleRef(const dtTileCacheObstacle* obmin) const;
+	m_saltBits uint32 ///< Number of salt bits in the tile ID.
+	m_tileBits uint32 ///< Number of tile bits in the tile ID.
 
-// 	dtStatus init(const dtTileCacheParams* params,
-// 				  struct dtTileCacheAlloc* talloc,
-// 				  struct dtTileCacheCompressor* tcomp,
-// 				  struct dtTileCacheMeshProcess* tmproc);
+	m_params DtTileCacheParams
 
-// 	int getTilesAt(const int tx, const int ty, dtCompressedTileRef* tiles, const int maxTiles) const ;
+	m_tcomp  DtTileCacheCompressor
+	m_tmproc DtTileCacheMeshProcess
 
-// 	dtCompressedTile* getTileAt(const int tx, const int ty, const int tlayer);
-// 	dtCompressedTileRef getTileRef(const dtCompressedTile* tile) const;
-// 	const dtCompressedTile* getTileByRef(dtCompressedTileRef ref) const;
+	m_obstacles        []DtTileCacheObstacle
+	m_nextFreeObstacle *DtTileCacheObstacle
 
-// 	dtStatus addTile(unsigned char* data, const int dataSize, unsigned char flags, dtCompressedTileRef* result);
+	m_reqs  [MAX_REQUESTS]ObstacleRequest
+	m_nreqs int32
 
-// 	dtStatus removeTile(dtCompressedTileRef ref, unsigned char** data, int* dataSize);
+	m_update  [MAX_UPDATE]DtCompressedTileRef
+	m_nupdate int32
+}
 
-// 	// Cylinder obstacle.
-// 	dtStatus addObstacle(const float* pos, const float radius, const float height, dtObstacleRef* result);
+/// Encodes a tile id.
+func (this *DtTileCache) encodeTileId(salt, it uint32) DtCompressedTileRef {
+	return (DtCompressedTileRef(salt) << this.m_tileBits) | DtCompressedTileRef(it)
+}
 
-// 	// Aabb obstacle.
-// 	dtStatus addBoxObstacle(const float* bmin, const float* bmax, dtObstacleRef* result);
+/// Decodes a tile salt.
+func (this *DtTileCache) decodeTileIdSalt(ref DtCompressedTileRef) uint32 {
+	saltMask := (DtCompressedTileRef(1) << this.m_saltBits) - 1
+	return uint32((ref >> this.m_tileBits) & saltMask)
+}
 
-// 	// Box obstacle: can be rotated in Y.
-// 	dtStatus addBoxObstacle(const float* center, const float* halfExtents, const float yRadians, dtObstacleRef* result);
+/// Decodes a tile id.
+func (this *DtTileCache) decodeTileIdTile(ref DtCompressedTileRef) uint32 {
+	tileMask := (DtCompressedTileRef(1) << this.m_tileBits) - 1
+	return uint32(ref & tileMask)
+}
 
-// 	dtStatus removeObstacle(const dtObstacleRef ref);
+/// Encodes an obstacle id.
+func (this *DtTileCache) encodeObstacleId(salt, it uint32) DtObstacleRef {
+	return (DtObstacleRef(salt) << 16) | DtObstacleRef(it)
+}
 
-// 	dtStatus queryTiles(const float* bmin, const float* bmax,
-// 						dtCompressedTileRef* results, int* resultCount, const int maxResults) const;
+/// Decodes an obstacle salt.
+func (this *DtTileCache) decodeObstacleIdSalt(ref DtObstacleRef) uint32 {
+	saltMask := (DtObstacleRef(1) << 16) - 1
+	return uint32((ref >> 16) & saltMask)
+}
 
-// 	/// Updates the tile cache by rebuilding tiles touched by unfinished obstacle requests.
-// 	///  @param[in]		dt			The time step size. Currently not used.
-// 	///  @param[in]		navmesh		The mesh to affect when rebuilding tiles.
-// 	///  @param[out]	upToDate	Whether the tile cache is fully up to date with obstacle requests and tile rebuilds.
-// 	///  							If the tile cache is up to date another (immediate) call to update will have no effect;
-// 	///  							otherwise another call will continue processing obstacle requests and tile rebuilds.
-// 	dtStatus update(const float dt, class dtNavMesh* navmesh, bool* upToDate = 0);
-
-// 	dtStatus buildNavMeshTilesAt(const int tx, const int ty, class dtNavMesh* navmesh);
-
-// 	dtStatus buildNavMeshTile(const dtCompressedTileRef ref, class dtNavMesh* navmesh);
-
-// 	void calcTightTileBounds(const struct dtTileCacheLayerHeader* header, float* bmin, float* bmax) const;
-
-// 	void getObstacleBounds(const struct dtTileCacheObstacle* ob, float* bmin, float* bmax) const;
-
-// 	/// Encodes a tile id.
-// 	inline dtCompressedTileRef encodeTileId(unsigned int salt, unsigned int it) const
-// 	{
-// 		return ((dtCompressedTileRef)salt << m_tileBits) | (dtCompressedTileRef)it;
-// 	}
-
-// 	/// Decodes a tile salt.
-// 	inline unsigned int decodeTileIdSalt(dtCompressedTileRef ref) const
-// 	{
-// 		const dtCompressedTileRef saltMask = ((dtCompressedTileRef)1<<m_saltBits)-1;
-// 		return (unsigned int)((ref >> m_tileBits) & saltMask);
-// 	}
-
-// 	/// Decodes a tile id.
-// 	inline unsigned int decodeTileIdTile(dtCompressedTileRef ref) const
-// 	{
-// 		const dtCompressedTileRef tileMask = ((dtCompressedTileRef)1<<m_tileBits)-1;
-// 		return (unsigned int)(ref & tileMask);
-// 	}
-
-// 	/// Encodes an obstacle id.
-// 	inline dtObstacleRef encodeObstacleId(unsigned int salt, unsigned int it) const
-// 	{
-// 		return ((dtObstacleRef)salt << 16) | (dtObstacleRef)it;
-// 	}
-
-// 	/// Decodes an obstacle salt.
-// 	inline unsigned int decodeObstacleIdSalt(dtObstacleRef ref) const
-// 	{
-// 		const dtObstacleRef saltMask = ((dtObstacleRef)1<<16)-1;
-// 		return (unsigned int)((ref >> 16) & saltMask);
-// 	}
-
-// 	/// Decodes an obstacle id.
-// 	inline unsigned int decodeObstacleIdObstacle(dtObstacleRef ref) const
-// 	{
-// 		const dtObstacleRef tileMask = ((dtObstacleRef)1<<16)-1;
-// 		return (unsigned int)(ref & tileMask);
-// 	}
-
-// private:
-// 	// Explicitly disabled copy constructor and copy assignment operator.
-// 	dtTileCache(const dtTileCache&);
-// 	dtTileCache& operator=(const dtTileCache&);
-
-// 	enum ObstacleRequestAction
-// 	{
-// 		REQUEST_ADD,
-// 		REQUEST_REMOVE,
-// 	};
-
-// 	struct ObstacleRequest
-// 	{
-// 		int action;
-// 		dtObstacleRef ref;
-// 	};
-
-// 	int m_tileLutSize;						///< Tile hash lookup size (must be pot).
-// 	int m_tileLutMask;						///< Tile hash lookup mask.
-
-// 	dtCompressedTile** m_posLookup;			///< Tile hash lookup.
-// 	dtCompressedTile* m_nextFreeTile;		///< Freelist of tiles.
-// 	dtCompressedTile* m_tiles;				///< List of tiles.
-
-// 	unsigned int m_saltBits;				///< Number of salt bits in the tile ID.
-// 	unsigned int m_tileBits;				///< Number of tile bits in the tile ID.
-
-// 	dtTileCacheParams m_params;
-
-// 	dtTileCacheAlloc* m_talloc;
-// 	dtTileCacheCompressor* m_tcomp;
-// 	dtTileCacheMeshProcess* m_tmproc;
-
-// 	dtTileCacheObstacle* m_obstacles;
-// 	dtTileCacheObstacle* m_nextFreeObstacle;
-
-// 	static const int MAX_REQUESTS = 64;
-// 	ObstacleRequest m_reqs[MAX_REQUESTS];
-// 	int m_nreqs;
-
-// 	static const int MAX_UPDATE = 64;
-// 	dtCompressedTileRef m_update[MAX_UPDATE];
-// 	int m_nupdate;
-// };
-
-// dtTileCache* dtAllocTileCache();
-// void dtFreeTileCache(dtTileCache* tc);
+/// Decodes an obstacle id.
+func (this *DtTileCache) decodeObstacleIdObstacle(ref DtObstacleRef) uint32 {
+	tileMask := (DtObstacleRef(1) << 16) - 1
+	return uint32(ref & tileMask)
+}
 
 // #endif

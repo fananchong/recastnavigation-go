@@ -19,6 +19,8 @@
 package dtcache
 
 import (
+	"unsafe"
+
 	"github.com/fananchong/recastnavigation-go/Detour"
 )
 
@@ -28,6 +30,10 @@ const (
 	DT_TILECACHE_NULL_AREA     uint8  = 0
 	DT_TILECACHE_WALKABLE_AREA uint8  = 63
 	DT_TILECACHE_NULL_IDX      uint16 = 0xffff
+)
+
+const (
+	DtTileCacheLayerHeaderSize = unsafe.Sizeof(DtTileCacheLayerHeader{})
 )
 
 type DtTileCacheLayerHeader struct {
