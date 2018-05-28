@@ -30,8 +30,24 @@ project "ctest"
     targetname "ctest"
     libdirs { "../bin" }
     files {
-        "../*.h",
-        "../*.cpp",
+        "../main.cpp",
+        "../detour.h",
+        "../detour.cpp",
+        "../Detour/Include/*.h",
+        "../Detour/Source/*.cpp",
+        "../DetourTileCache/Include/*.h",
+        "../DetourTileCache/Source/*.cpp",
+        "../Contrib/fastlz",
+    }
+    
+project "cbenchmark"
+    kind "ConsoleApp"
+    targetname "cbenchmark"
+    libdirs { "../bin" }
+    files {
+        "../benchmark.cpp",
+        "../detour.h",
+        "../detour.cpp",
         "../Detour/Include/*.h",
         "../Detour/Source/*.cpp",
         "../DetourTileCache/Include/*.h",

@@ -37,7 +37,7 @@ func Test_main(t *testing.T) {
 	sliceHeader.Len = int(len(tempdata2) / int(unsafe.Sizeof(float32(1.0))))
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata2[0])))
 
-	t.Logf("sliceHeader.Cap:", sliceHeader.Cap)
+	t.Log("sliceHeader.Cap:", sliceHeader.Cap)
 
 	mesh := LoadStaticMesh("nav_test.obj.tile.bin")
 	query := CreateQuery(mesh, 2048)

@@ -4,7 +4,7 @@
 #include <vector>
 #include <time.h>
 
-const int RAND_MAX_COUNT = 10000;
+const int RAND_MAX_COUNT = 200000;
 float randValue[RAND_MAX_COUNT];
 int randIndex = 0;
 inline float frand()
@@ -20,9 +20,25 @@ const int OUT_MAX_COUNT = 10000;
 float outValue[OUT_MAX_COUNT];
 int outIndex = 0;
 
+
+float myrand() {
+    return (float)rand() / (float)RAND_MAX;
+}
+
+const char* MESH_FILE = "../../nav_test.obj.tile.bin";
+
 int main(int argn, char* argv[]) {
+    srand((unsigned int)(time(0)));
+
+    int errCode;
+    auto mesh = LoadStaticMesh(MESH_FILE, errCode);
+    assert(errCode == 0);
+    auto query = CreateQuery(mesh, 2048);
+    assert(query != nullptr);
+    auto filter = dtQueryFilter();
+
+
     if (argn > 1 && argv[1] == std::string("rand")) {
-        srand((unsigned int)(time(0)));
         FILE* f = fopen("../../rand.bin", "wb");
         for (int i = 0; i < RAND_MAX_COUNT;i++) {
             float v = (float)rand() / (float)RAND_MAX;
@@ -30,12 +46,16 @@ int main(int argn, char* argv[]) {
         }
         fclose(f);
     }
+    else if (argn > 1 && argv[1] == std::string("randpos")) {
+        void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter);
+        randomPos(mesh, query, &filter);
+    }
     else {
         FILE* f1 = fopen("../../rand.bin", "rb");
-        fread(randValue, RAND_MAX_COUNT, 1, f1);
+        fread(randValue, RAND_MAX_COUNT * sizeof(float), 1, f1);
         fclose(f1);
-        int test();
-        test();
+        int test(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter);
+        test(mesh, query, &filter);
         FILE* f2 = fopen("../../result.bin", "wb");
         fwrite(outValue, outIndex * sizeof(float), 1, f2);
         fclose(f2);
@@ -43,14 +63,21 @@ int main(int argn, char* argv[]) {
     return 0;
 }
 
-int test() {
-    int errCode;
-    auto mesh = LoadStaticMesh("../../nav_test.obj.tile.bin", errCode);
-    assert(errCode == 0);
-    auto query = CreateQuery(mesh, 2048);
-    assert(query != nullptr);
-    auto filter = dtQueryFilter();
+void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter) {
+    FILE* f = fopen("../../randpos.bin", "wb");
+    for (int i = 0; i < RAND_MAX_COUNT;i++) {
+        float startPos[3] = { 0,0,0 };
+        dtPolyRef startRef = 0;
+        dtStatus stat = query->findRandomPoint(filter, myrand, &startRef, startPos);
+        float tempRef = float(startRef);
+        assert(dtStatusSucceed(stat));
+        fwrite(&tempRef, sizeof(float), 1, f);
+        fwrite(&startPos, sizeof(float) * 3, 1, f);
+    }
+    fclose(f);
+}
 
+int test(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter) {
     dtStatus stat;
     float halfExtents[3] = { 2, 4, 2 };
     float startPos[3] = { 0,0,0 };
@@ -59,9 +86,9 @@ int test() {
     dtPolyRef endRef = 0;
 
     //printf("================================================ findRandomPoint ================================================\n");
-    stat = query->findRandomPoint(&filter, frand, &startRef, startPos);
+    stat = query->findRandomPoint(filter, frand, &startRef, startPos);
     assert(dtStatusSucceed(stat));
-    stat = query->findRandomPoint(&filter, frand, &endRef, endPos);
+    stat = query->findRandomPoint(filter, frand, &endRef, endPos);
     assert(dtStatusSucceed(stat));
     //printf("startPos: %.2f %.2f %.2f\n", startPos[0], startPos[1], startPos[2]);
     //printf("endPos: %.2f %.2f %.2f\n", endPos[0], endPos[1], endPos[2]);
@@ -82,7 +109,7 @@ int test() {
     float tempPos[3] = { 0,0,0 };
     dtPolyRef nearestRef = 0;
     float nearestPos[3] = { 0,0,0 };
-    stat = query->findNearestPoly(tempPos, halfExtents, &filter, &nearestRef, nearestPos);
+    stat = query->findNearestPoly(tempPos, halfExtents, filter, &nearestRef, nearestPos);
     assert(dtStatusSucceed(stat));
     //printf("nearestPos: %.2f %.2f %.2f\n", nearestPos[0], nearestPos[1], nearestPos[2]);
     //printf("nearestRef: %d\n", nearestRef);
@@ -96,7 +123,7 @@ int test() {
     //printf("================================================ findPath ================================================\n");
     dtPolyRef path[PATH_MAX_NODE];
     int pathCount = 0;
-    stat = query->findPath(startRef, endRef, startPos, endPos, &filter, path, &pathCount, PATH_MAX_NODE);
+    stat = query->findPath(startRef, endRef, startPos, endPos, filter, path, &pathCount, PATH_MAX_NODE);
     assert(dtStatusSucceed(stat));
     //printf("pathCount: %d\n", pathCount);
     outValue[outIndex++] = (float(pathCount));
@@ -161,7 +188,7 @@ int test() {
     dtPolyRef visited[PATH_MAX_NODE];
     int visitedCount = 0;
     bool bHit = false;
-    stat = query->moveAlongSurface(startRef, startPos, endPos, &filter, resultPos, visited, &visitedCount, PATH_MAX_NODE, bHit);
+    stat = query->moveAlongSurface(startRef, startPos, endPos, filter, resultPos, visited, &visitedCount, PATH_MAX_NODE, bHit);
     assert(dtStatusSucceed(stat));
     //printf("resultPos: %.2f %.2f %.2f\n", resultPos[0], resultPos[1], resultPos[2]);
     //printf("bHit: %d\n", bHit);
@@ -181,7 +208,7 @@ int test() {
     float hitDist = 0;
     float hitPos[3] = { 0,0,0 };
     float hitNormal[3] = { 0,0,0 };
-    stat = query->findDistanceToWall(startRef, startPos, 30, &filter, &hitDist, hitPos, hitNormal);
+    stat = query->findDistanceToWall(startRef, startPos, 30, filter, &hitDist, hitPos, hitNormal);
     assert(dtStatusSucceed(stat));
     //printf("hitPos: %.2f %.2f %.2f\n", hitPos[0], hitPos[1], hitPos[2]);
     //printf("hitDist: %f\n", hitDist);
@@ -198,7 +225,7 @@ int test() {
 
     {
         //printf("================================================ SlicedFindPath # 0================================================\n");
-        stat = query->initSlicedFindPath(startRef, endRef, startPos, endPos, &filter, 0);
+        stat = query->initSlicedFindPath(startRef, endRef, startPos, endPos, filter, 0);
         assert(dtStatusInProgress(stat) || dtStatusSucceed(stat));
         for (;true;) {
 
@@ -224,7 +251,7 @@ int test() {
 
     {
         //printf("================================================ SlicedFindPath # DT_FINDPATH_ANY_ANGLE ================================================\n");
-        stat = query->initSlicedFindPath(startRef, endRef, startPos, endPos, &filter, DT_FINDPATH_ANY_ANGLE);
+        stat = query->initSlicedFindPath(startRef, endRef, startPos, endPos, filter, DT_FINDPATH_ANY_ANGLE);
         assert(dtStatusInProgress(stat) || dtStatusSucceed(stat));
         for (;true;) {
 
