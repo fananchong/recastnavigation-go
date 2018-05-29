@@ -33,62 +33,61 @@ const (
 )
 
 const (
+	DtTileCacheLayerSize       = unsafe.Sizeof(DtTileCacheLayer{})
 	DtTileCacheLayerHeaderSize = unsafe.Sizeof(DtTileCacheLayerHeader{})
 )
 
 type DtTileCacheLayerHeader struct {
-	magic   int32 ///< Data magic
-	version int32 ///< Data version
-	tx      int32
-	ty      int32
-	tlayer  int32
-	bmin    [3]float32
-	bmax    [3]float32
-	hmin    uint16
-	hmax    uint16 ///< Height min/max range
-	width   uint8
-	height  uint8 ///< Dimension of the layer.
-	minx    uint8
-	maxx    uint8
-	miny    uint8
-	maxy    uint8 ///< Usable sub-region.
+	Magic   int32 ///< Data magic
+	Version int32 ///< Data version
+	Tx      int32
+	Ty      int32
+	Tlayer  int32
+	Bmin    [3]float32
+	Bmax    [3]float32
+	Hmin    uint16 ///< Height min/max range
+	Hmax    uint16 ///< Height min/max range
+	Width   uint8  ///< Dimension of the layer.
+	Height  uint8  ///< Dimension of the layer.
+	Minx    uint8  ///< Usable sub-region.
+	Maxx    uint8  ///< Usable sub-region.
+	Miny    uint8  ///< Usable sub-region.
+	Maxy    uint8  ///< Usable sub-region.
 }
 
 type DtTileCacheLayer struct {
-	header   *DtTileCacheLayerHeader
-	regCount uint8 ///< Region count.
-	heights  []uint8
-	areas    []uint8
-	cons     []uint8
-	regs     []uint8
+	Header   *DtTileCacheLayerHeader
+	RegCount uint8 ///< Region count.
+	Heights  []uint8
+	Areas    []uint8
+	Cons     []uint8
+	Regs     []uint8
 }
 
 type DtTileCacheContour struct {
-	nverts int32
-	verts  []uint8
-	reg    uint8
-	area   uint8
+	Nverts int32
+	Verts  []uint8
+	Reg    uint8
+	Area   uint8
 }
 
 type DtTileCacheContourSet struct {
-	nconts int32
-	conts  []DtTileCacheContour
+	Nconts int32
+	Conts  []DtTileCacheContour
 }
 
 type DtTileCachePolyMesh struct {
-	nvp    int32
-	nverts int32    ///< Number of vertices.
-	npolys int32    ///< Number of polygons.
-	verts  []uint16 ///< Vertices of the mesh, 3 elements per vertex.
-	polys  []uint16 ///< Polygons of the mesh, nvp*2 elements per polygon.
-	flags  []uint16 ///< Per polygon flags.
-	areas  []uint8  ///< Area ID of polygons.
+	Nvp    int32
+	Nverts int32    ///< Number of vertices.
+	Npolys int32    ///< Number of polygons.
+	Verts  []uint16 ///< Vertices of the mesh, 3 elements per vertex.
+	Polys  []uint16 ///< Polygons of the mesh, nvp*2 elements per polygon.
+	Flags  []uint16 ///< Per polygon flags.
+	Areas  []uint8  ///< Area ID of polygons.
 }
 
 type DtTileCacheCompressor interface {
-	DtFreeTileCacheCompressor()
-
 	MaxCompressedSize(bufferSize int32) int32
-	Compress(buffer []uint8, bufferSize int32, compressed []uint8, maxCompressedSize int32) (compressedSize int32, status detour.DtStatus)
-	Decompress(compressed []uint8, compressedSize int32, buffer []uint8, maxBufferSize int32) (bufferSize int32, status detour.DtStatus)
+	Compress(buffer []byte, bufferSize int32, compressed []byte, maxCompressedSize int32, compressedSize *int32) detour.DtStatus
+	Decompress(compressed []byte, compressedSize int32, buffer []byte, maxBufferSize int32, bufferSize *int32) detour.DtStatus
 }

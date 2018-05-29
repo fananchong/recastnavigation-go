@@ -19,19 +19,19 @@
 package dtcache
 
 import (
+	"reflect"
 	"unsafe"
 
 	detour "github.com/fananchong/recastnavigation-go/Detour"
 )
 
-var (
-	offsetX = [4]int32{-1, 0, 1, 0}
-	offsetY = [4]int32{0, 1, 0, -1}
-)
+var offsetX = [4]int32{-1, 0, 1, 0}
 
 func getDirOffsetX(dir int32) int32 {
 	return offsetX[dir&0x03]
 }
+
+var offsetY = [4]int32{0, 1, 0, -1}
 
 func getDirOffsetY(dir int32) int32 {
 	return offsetY[dir&0x03]
@@ -48,7 +48,11 @@ func DtAllocTileCacheContourSet() *DtTileCacheContourSet {
 }
 
 func DtFreeTileCacheContourSet(cset *DtTileCacheContourSet) {
-
+	if cset == nil {
+		return
+	}
+	cset.Conts = nil
+	cset.Nconts = 0
 }
 
 func DtAllocTileCachePolyMesh() *DtTileCachePolyMesh {
@@ -57,7 +61,15 @@ func DtAllocTileCachePolyMesh() *DtTileCachePolyMesh {
 }
 
 func DtFreeTileCachePolyMesh(lmesh *DtTileCachePolyMesh) {
-
+	if lmesh == nil {
+		return
+	}
+	lmesh.Verts = nil
+	lmesh.Nverts = 0
+	lmesh.Polys = nil
+	lmesh.Npolys = 0
+	lmesh.Flags = nil
+	lmesh.Areas = nil
 }
 
 type dtLayerSweepSpan struct {
@@ -69,29 +81,30 @@ type dtLayerSweepSpan struct {
 const DT_LAYER_MAX_NEIS int32 = 16
 
 type dtLayerMonotoneRegion struct {
-	area   int32
-	neis   [DT_LAYER_MAX_NEIS]uint8
-	nneis  uint8
-	regId  uint8
-	areaId uint8
+	Area   int32
+	Neis   [DT_LAYER_MAX_NEIS]uint8
+	Nneis  uint8
+	RegId  uint8
+	AreaId uint8
 }
 
 type dtTempContour struct {
-	verts  []uint8
-	nverts int32
-	cverts int32
-	poly   []uint16
-	npoly  int32
-	cpoly  int32
+	Verts  []uint8
+	Nverts int32
+	Cverts int32
+	Poly   []uint16
+	Npoly  int32
+	Cpoly  int32
 }
 
-func NewDtTempContour(vbuf []uint8, nvbuf int32, pbuf []uint16, npbuf int32) *dtTempContour {
-	return &dtTempContour{
-		verts:  vbuf,
-		cverts: nvbuf,
-		poly:   pbuf,
-		cpoly:  npbuf,
-	}
+func (this *dtTempContour) init(vbuf []uint8, nvbuf int32, pbuf []uint16, npbuf int32) {
+	this.Verts = vbuf
+	this.Nverts = 0
+	this.Cverts = nvbuf
+	this.Poly = pbuf
+	this.Npoly = 0
+	this.Cpoly = npbuf
+
 }
 
 func overlapRangeExl(amin, amax, bmin, bmax uint16) bool {
@@ -111,10 +124,10 @@ func addUniqueLast(a []uint8, an *uint8, v uint8) {
 }
 
 func isConnected(layer *DtTileCacheLayer, ia, ib, walkableClimb int32) bool {
-	if layer.areas[ia] != layer.areas[ib] {
+	if layer.Areas[ia] != layer.Areas[ib] {
 		return false
 	}
-	if detour.DtAbsInt32(int32(layer.heights[ia])-int32(layer.heights[ib])) > walkableClimb {
+	if detour.DtAbsInt32(int32(layer.Heights[ia])-int32(layer.Heights[ib])) > walkableClimb {
 		return false
 	}
 	return true
@@ -124,12 +137,12 @@ func canMerge(oldRegId, newRegId uint8, regs []dtLayerMonotoneRegion, nregs int3
 	var count int32
 	for i := int32(0); i < nregs; i++ {
 		reg := &regs[i]
-		if reg.regId != oldRegId {
+		if reg.RegId != oldRegId {
 			continue
 		}
-		nnei := int32(reg.nneis)
+		nnei := int32(reg.Nneis)
 		for j := int32(0); j < nnei; j++ {
-			if regs[reg.neis[j]].regId == newRegId {
+			if regs[reg.Neis[j]].RegId == newRegId {
 				count++
 			}
 		}
@@ -137,14 +150,14 @@ func canMerge(oldRegId, newRegId uint8, regs []dtLayerMonotoneRegion, nregs int3
 	return count == 1
 }
 
-func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detour.DtStatus {
+func DtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detour.DtStatus {
 
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 
-	layer.regs = make([]uint8, w*h)
+	layer.Regs = make([]uint8, w*h)
 	for i := int32(0); i < w*h; i++ {
-		layer.regs[i] = 0xff
+		layer.Regs[i] = 0xff
 	}
 
 	nsweeps := w
@@ -162,7 +175,7 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 
 		for x := int32(0); x < w; x++ {
 			idx := x + y*w
-			if layer.areas[idx] == DT_TILECACHE_NULL_AREA {
+			if layer.Areas[idx] == DT_TILECACHE_NULL_AREA {
 				continue
 			}
 
@@ -171,8 +184,8 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 			// -x
 			xidx := (x - 1) + y*w
 			if x > 0 && isConnected(layer, idx, xidx, walkableClimb) {
-				if layer.regs[xidx] != 0xff {
-					sid = layer.regs[xidx]
+				if layer.Regs[xidx] != 0xff {
+					sid = layer.Regs[xidx]
 				}
 			}
 
@@ -186,7 +199,7 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 			// -y
 			yidx := x + (y-1)*w
 			if y > 0 && isConnected(layer, idx, yidx, walkableClimb) {
-				nr := layer.regs[yidx]
+				nr := layer.Regs[yidx]
 				if nr != 0xff {
 					// Set neighbour when first valid neighbour is encoutered.
 					if sweeps[sid].ns == 0 {
@@ -205,7 +218,7 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 				}
 			}
 
-			layer.regs[idx] = sid
+			layer.Regs[idx] = sid
 		}
 
 		// Create unique ID.
@@ -227,8 +240,8 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 		// Remap local sweep ids to region ids.
 		for x := int32(0); x < w; x++ {
 			idx := x + y*w
-			if layer.regs[idx] != 0xff {
-				layer.regs[idx] = sweeps[layer.regs[idx]].id
+			if layer.Regs[idx] != 0xff {
+				layer.Regs[idx] = sweeps[layer.Regs[idx]].id
 			}
 		}
 	}
@@ -238,36 +251,36 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 	regs := make([]dtLayerMonotoneRegion, nregs)
 
 	for i := int32(0); i < nregs; i++ {
-		regs[i].regId = 0xff
+		regs[i].RegId = 0xff
 	}
 
 	// Find region neighbours.
 	for y := int32(0); y < h; y++ {
 		for x := int32(0); x < w; x++ {
 			idx := x + y*w
-			ri := layer.regs[idx]
+			ri := layer.Regs[idx]
 			if ri == 0xff {
 				continue
 			}
 
 			// Update area.
-			regs[ri].area++
-			regs[ri].areaId = layer.areas[idx]
+			regs[ri].Area++
+			regs[ri].AreaId = layer.Areas[idx]
 
 			// Update neighbours
 			ymi := x + (y-1)*w
 			if y > 0 && isConnected(layer, idx, ymi, walkableClimb) {
-				rai := layer.regs[ymi]
+				rai := layer.Regs[ymi]
 				if rai != 0xff && rai != ri {
-					addUniqueLast(regs[ri].neis[:], &regs[ri].nneis, rai)
-					addUniqueLast(regs[rai].neis[:], &regs[rai].nneis, ri)
+					addUniqueLast(regs[ri].Neis[:], &regs[ri].Nneis, rai)
+					addUniqueLast(regs[rai].Neis[:], &regs[rai].Nneis, ri)
 				}
 			}
 		}
 	}
 
 	for i := int32(0); i < nregs; i++ {
-		regs[i].regId = uint8(i)
+		regs[i].RegId = uint8(i)
 	}
 
 	for i := int32(0); i < nregs; i++ {
@@ -275,28 +288,28 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 
 		merge := int32(-1)
 		mergea := int32(0)
-		for j := int32(0); j < int32(reg.nneis); j++ {
-			nei := reg.neis[j]
+		for j := int32(0); j < int32(reg.Nneis); j++ {
+			nei := reg.Neis[j]
 			regn := &regs[nei]
-			if reg.regId == regn.regId {
+			if reg.RegId == regn.RegId {
 				continue
 			}
-			if reg.areaId != regn.areaId {
+			if reg.AreaId != regn.AreaId {
 				continue
 			}
-			if regn.area > mergea {
-				if canMerge(reg.regId, regn.regId, regs, nregs) {
-					mergea = regn.area
+			if regn.Area > mergea {
+				if canMerge(reg.RegId, regn.RegId, regs, nregs) {
+					mergea = regn.Area
 					merge = int32(nei)
 				}
 			}
 		}
 		if merge != -1 {
-			oldId := reg.regId
-			newId := regs[merge].regId
+			oldId := reg.RegId
+			newId := regs[merge].RegId
 			for j := int32(0); j < nregs; j++ {
-				if regs[j].regId == oldId {
-					regs[j].regId = newId
+				if regs[j].RegId == oldId {
+					regs[j].RegId = newId
 				}
 			}
 		}
@@ -304,11 +317,10 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 
 	// Compact ids.
 	var remap [256]uint8
-	detour.MemsetUInt8(remap[:], 0)
 	// Find number of unique regions.
 	regId = 0
 	for i := int32(0); i < nregs; i++ {
-		remap[regs[i].regId] = 1
+		remap[regs[i].RegId] = 1
 	}
 	for i := 0; i < 256; i++ {
 		if remap[i] > 0 {
@@ -318,14 +330,14 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 	}
 	// Remap ids.
 	for i := int32(0); i < nregs; i++ {
-		regs[i].regId = remap[regs[i].regId]
+		regs[i].RegId = remap[regs[i].RegId]
 	}
 
-	layer.regCount = regId
+	layer.RegCount = regId
 
 	for i := int32(0); i < w*h; i++ {
-		if layer.regs[i] != 0xff {
-			layer.regs[i] = regs[layer.regs[i]].regId
+		if layer.Regs[i] != 0xff {
+			layer.Regs[i] = regs[layer.Regs[i]].RegId
 		}
 	}
 
@@ -334,9 +346,9 @@ func dtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 
 func appendVertex(cont *dtTempContour, x, y, z, r int32) bool {
 	// Try to merge with existing segments.
-	if cont.nverts > 1 {
-		pa := cont.verts[(cont.nverts-2)*4:]
-		pb := cont.verts[(cont.nverts-1)*4:]
+	if cont.Nverts > 1 {
+		pa := cont.Verts[(cont.Nverts-2)*4:]
+		pb := cont.Verts[(cont.Nverts-1)*4:]
 		if int32(pb[3]) == r {
 			if pa[0] == pb[0] && int32(pb[0]) == x {
 				// The verts are aligned aling x-axis, update z.
@@ -353,26 +365,26 @@ func appendVertex(cont *dtTempContour, x, y, z, r int32) bool {
 	}
 
 	// Add new point.
-	if cont.nverts+1 > cont.cverts {
+	if cont.Nverts+1 > cont.Cverts {
 		return false
 	}
 
-	v := cont.verts[cont.nverts*4:]
+	v := cont.Verts[cont.Nverts*4:]
 	v[0] = uint8(x)
 	v[1] = uint8(y)
 	v[2] = uint8(z)
 	v[3] = uint8(r)
-	cont.nverts++
+	cont.Nverts++
 
 	return true
 }
 
 func getNeighbourReg(layer *DtTileCacheLayer, ax, ay, dir int32) uint8 {
-	w := int32(layer.header.width)
+	w := int32(layer.Header.Width)
 	ia := ax + ay*w
 
-	con := layer.cons[ia] & 0xf
-	portal := layer.cons[ia] >> 4
+	con := layer.Cons[ia] & 0xf
+	portal := layer.Cons[ia] >> 4
 	mask := uint8(1 << uint32(dir))
 
 	if (con & mask) == 0 {
@@ -387,14 +399,14 @@ func getNeighbourReg(layer *DtTileCacheLayer, ax, ay, dir int32) uint8 {
 	by := ay + getDirOffsetY(dir)
 	ib := bx + by*w
 
-	return layer.regs[ib]
+	return layer.Regs[ib]
 }
 
 func walkContour(layer *DtTileCacheLayer, x, y int32, cont *dtTempContour) bool {
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 
-	cont.nverts = 0
+	cont.Nverts = 0
 
 	startX := x
 	startY := y
@@ -403,7 +415,7 @@ func walkContour(layer *DtTileCacheLayer, x, y int32, cont *dtTempContour) bool 
 	for i := int32(0); i < 4; i++ {
 		dir := (i + 3) & 3
 		rn := getNeighbourReg(layer, x, y, dir)
-		if rn != layer.regs[x+y*w] {
+		if rn != layer.Regs[x+y*w] {
 			startDir = dir
 			break
 		}
@@ -423,7 +435,7 @@ func walkContour(layer *DtTileCacheLayer, x, y int32, cont *dtTempContour) bool 
 		ny := y
 		ndir := dir
 
-		if rn != layer.regs[x+y*w] {
+		if rn != layer.Regs[x+y*w] {
 			// Solid edge.
 			px := x
 			pz := y
@@ -432,12 +444,13 @@ func walkContour(layer *DtTileCacheLayer, x, y int32, cont *dtTempContour) bool 
 				pz++
 			case 1:
 				px++
+				pz++
 			case 2:
 				px++
 			}
 
 			// Try to merge with previous vertex.
-			if !appendVertex(cont, px, int32(layer.heights[x+y*w]), pz, int32(rn)) {
+			if !appendVertex(cont, px, int32(layer.Heights[x+y*w]), pz, int32(rn)) {
 				return false
 			}
 
@@ -461,10 +474,10 @@ func walkContour(layer *DtTileCacheLayer, x, y int32, cont *dtTempContour) bool 
 	}
 
 	// Remove last vertex if it is duplicate of the first one.
-	pa := cont.verts[(cont.nverts-1)*4:]
-	pb := cont.verts[0:]
+	pa := cont.Verts[(cont.Nverts-1)*4:]
+	pb := cont.Verts[0:]
 	if pa[0] == pb[0] && pa[2] == pb[2] {
-		cont.nverts--
+		cont.Nverts--
 	}
 
 	return true
@@ -493,31 +506,31 @@ func distancePtSeg(x, z, px, pz, qx, qz int32) float32 {
 }
 
 func simplifyContour(cont *dtTempContour, maxError float32) {
-	cont.npoly = 0
+	cont.Npoly = 0
 
-	for i := int32(0); i < cont.nverts; i++ {
-		j := (i + 1) % cont.nverts
+	for i := int32(0); i < cont.Nverts; i++ {
+		j := (i + 1) % cont.Nverts
 		// Check for start of a wall segment.
-		ra := cont.verts[j*4+3]
-		rb := cont.verts[i*4+3]
+		ra := cont.Verts[j*4+3]
+		rb := cont.Verts[i*4+3]
 		if ra != rb {
-			cont.poly[cont.npoly] = uint16(i)
-			cont.npoly++
+			cont.Poly[cont.Npoly] = uint16(i)
+			cont.Npoly++
 		}
 	}
-	if cont.npoly < 2 {
+	if cont.Npoly < 2 {
 		// If there is no transitions at all,
 		// create some initial points for the simplification process.
 		// Find lower-left and upper-right vertices of the contour.
-		llx := cont.verts[0]
-		llz := cont.verts[2]
+		llx := cont.Verts[0]
+		llz := cont.Verts[2]
 		lli := int32(0)
-		urx := cont.verts[0]
-		urz := cont.verts[2]
+		urx := cont.Verts[0]
+		urz := cont.Verts[2]
 		uri := int32(0)
-		for i := int32(1); i < cont.nverts; i++ {
-			x := cont.verts[i*4+0]
-			z := cont.verts[i*4+2]
+		for i := int32(1); i < cont.Nverts; i++ {
+			x := cont.Verts[i*4+0]
+			z := cont.Verts[i*4+2]
 			if x < llx || (x == llx && z < llz) {
 				llx = x
 				llz = z
@@ -529,25 +542,25 @@ func simplifyContour(cont *dtTempContour, maxError float32) {
 				uri = i
 			}
 		}
-		cont.npoly = 0
-		cont.poly[cont.npoly] = uint16(lli)
-		cont.npoly++
-		cont.poly[cont.npoly] = uint16(uri)
-		cont.npoly++
+		cont.Npoly = 0
+		cont.Poly[cont.Npoly] = uint16(lli)
+		cont.Npoly++
+		cont.Poly[cont.Npoly] = uint16(uri)
+		cont.Npoly++
 	}
 
 	// Add points until all raw points are within
 	// error tolerance to the simplified shape.
-	for i := int32(0); i < cont.npoly; {
-		ii := (i + 1) % cont.npoly
+	for i := int32(0); i < cont.Npoly; {
+		ii := (i + 1) % cont.Npoly
 
-		ai := int32(cont.poly[i])
-		ax := int32(cont.verts[ai*4+0])
-		az := int32(cont.verts[ai*4+2])
+		ai := int32(cont.Poly[i])
+		ax := int32(cont.Verts[ai*4+0])
+		az := int32(cont.Verts[ai*4+2])
 
-		bi := int32(cont.poly[ii])
-		bx := int32(cont.verts[bi*4+0])
-		bz := int32(cont.verts[bi*4+2])
+		bi := int32(cont.Poly[ii])
+		bx := int32(cont.Verts[bi*4+0])
+		bz := int32(cont.Verts[bi*4+2])
 
 		// Find maximum deviation from the segment.
 		var maxd float32
@@ -559,32 +572,32 @@ func simplifyContour(cont *dtTempContour, maxError float32) {
 		// opposite segments.
 		if bx > ax || (bx == ax && bz > az) {
 			cinc = 1
-			ci = (ai + cinc) % cont.nverts
+			ci = (ai + cinc) % cont.Nverts
 			endi = bi
 		} else {
-			cinc = cont.nverts - 1
-			ci = (bi + cinc) % cont.nverts
+			cinc = cont.Nverts - 1
+			ci = (bi + cinc) % cont.Nverts
 			endi = ai
 		}
 
 		// Tessellate only outer edges or edges between areas.
 		for ci != endi {
-			d := distancePtSeg(int32(cont.verts[ci*4+0]), int32(cont.verts[ci*4+2]), ax, az, bx, bz)
+			d := distancePtSeg(int32(cont.Verts[ci*4+0]), int32(cont.Verts[ci*4+2]), ax, az, bx, bz)
 			if d > maxd {
 				maxd = d
 				maxi = ci
 			}
-			ci = (ci + cinc) % cont.nverts
+			ci = (ci + cinc) % cont.Nverts
 		}
 
 		// If the max deviation is larger than accepted error,
 		// add new point, else continue to next segment.
 		if maxi != -1 && maxd > (maxError*maxError) {
-			cont.npoly++
-			for j := cont.npoly - 1; j > i; j-- {
-				cont.poly[j] = cont.poly[j-1]
+			cont.Npoly++
+			for j := cont.Npoly - 1; j > i; j-- {
+				cont.Poly[j] = cont.Poly[j-1]
 			}
-			cont.poly[i+1] = uint16(maxi)
+			cont.Poly[i+1] = uint16(maxi)
 		} else {
 			i++
 		}
@@ -592,35 +605,33 @@ func simplifyContour(cont *dtTempContour, maxError float32) {
 
 	// Remap vertices
 	var start int32
-	for i := int32(1); i < cont.npoly; i++ {
-		if cont.poly[i] < cont.poly[start] {
+	for i := int32(1); i < cont.Npoly; i++ {
+		if cont.Poly[i] < cont.Poly[start] {
 			start = i
 		}
 	}
 
-	cont.nverts = 0
-	for i := int32(0); i < cont.npoly; i++ {
-		j := (start + i) % cont.npoly
-		src := cont.verts[cont.poly[j]*4:]
-		dst := cont.verts[cont.nverts*4:]
+	cont.Nverts = 0
+	for i := int32(0); i < cont.Npoly; i++ {
+		j := (start + i) % cont.Npoly
+		src := cont.Verts[cont.Poly[j]*4:]
+		dst := cont.Verts[cont.Nverts*4:]
 		dst[0] = src[0]
 		dst[1] = src[1]
 		dst[2] = src[2]
 		dst[3] = src[3]
-		cont.nverts++
+		cont.Nverts++
 	}
 }
 
-func getCornerHeight(layer *DtTileCacheLayer, x, y, z, walkableClimb int32) (shouldRemove bool, height uint8) {
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+func getCornerHeight(layer *DtTileCacheLayer, x, y, z, walkableClimb int32, shouldRemove *bool) uint8 {
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 
 	var n int32
 
-	shouldRemove = false
-	height = uint8(0)
-
 	portal := uint8(0xf)
+	height := uint8(0)
 	preg := uint8(0xff)
 	allSameReg := true
 
@@ -630,14 +641,14 @@ func getCornerHeight(layer *DtTileCacheLayer, x, y, z, walkableClimb int32) (sho
 			pz := z + dz
 			if px >= 0 && pz >= 0 && px < w && pz < h {
 				idx := px + pz*w
-				lh := int32(layer.heights[idx])
-				if detour.DtAbsInt32(lh-y) <= walkableClimb && layer.areas[idx] != DT_TILECACHE_NULL_AREA {
+				lh := int32(layer.Heights[idx])
+				if detour.DtAbsInt32(lh-y) <= walkableClimb && layer.Areas[idx] != DT_TILECACHE_NULL_AREA {
 					height = detour.DtMaxUInt8(height, uint8(lh))
-					portal &= (layer.cons[idx] >> 4)
-					if preg != 0xff && preg != layer.regs[idx] {
+					portal &= (layer.Cons[idx] >> 4)
+					if preg != 0xff && preg != layer.Regs[idx] {
 						allSameReg = false
 					}
-					preg = layer.regs[idx]
+					preg = layer.Regs[idx]
 					n++
 				}
 			}
@@ -646,74 +657,88 @@ func getCornerHeight(layer *DtTileCacheLayer, x, y, z, walkableClimb int32) (sho
 
 	var portalCount int32
 	for dir := uint32(0); dir < 4; dir++ {
-		if portal&(1<<dir) > 0 {
+		if (portal & (1 << dir)) != 0 {
 			portalCount++
 		}
 	}
 
-	shouldRemove = false
+	*shouldRemove = false
 	if n > 1 && portalCount == 1 && allSameReg {
-		shouldRemove = true
+		*shouldRemove = true
 	}
 
-	return
+	return height
 }
 
 // TODO: move this somewhere else, once the layer meshing is done.
-func dtBuildTileCacheContours(layer *DtTileCacheLayer, walkableClimb int32, maxError float32, lcset *DtTileCacheContourSet) detour.DtStatus {
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+func DtBuildTileCacheContours(layer *DtTileCacheLayer, walkableClimb int32, maxError float32, lcset *DtTileCacheContourSet) detour.DtStatus {
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 
-	lcset.nconts = int32(layer.regCount)
-	lcset.conts = make([]DtTileCacheContour, lcset.nconts)
+	lcset.Nconts = int32(layer.RegCount)
+	lcset.Conts = make([]DtTileCacheContour, lcset.Nconts)
+	if lcset.Conts == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	// Allocate temp buffer for contour tracing.
 	maxTempVerts := (w + h) * 2 * 2 // Twice around the layer.
 
 	tempVerts := make([]uint8, maxTempVerts*4)
+	if tempVerts == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	tempPoly := make([]uint16, maxTempVerts)
+	if tempPoly == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
-	temp := NewDtTempContour(tempVerts, maxTempVerts, tempPoly, maxTempVerts)
+	var temp dtTempContour
+	temp.init(tempVerts, maxTempVerts, tempPoly, maxTempVerts)
 
 	// Find contours.
 	for y := int32(0); y < h; y++ {
 		for x := int32(0); x < w; x++ {
 			idx := x + y*w
-			ri := layer.regs[idx]
+			ri := layer.Regs[idx]
 			if ri == 0xff {
 				continue
 			}
 
-			cont := &lcset.conts[ri]
+			cont := &lcset.Conts[ri]
 
-			if cont.nverts > 0 {
+			if cont.Nverts > 0 {
 				continue
 			}
 
-			cont.reg = ri
-			cont.area = layer.areas[idx]
+			cont.Reg = ri
+			cont.Area = layer.Areas[idx]
 
-			if !walkContour(layer, x, y, temp) {
+			if !walkContour(layer, x, y, &temp) {
 				// Too complex contour.
 				// Note: If you hit here ofte, try increasing 'maxTempVerts'.
 				return detour.DT_FAILURE | detour.DT_BUFFER_TOO_SMALL
 			}
 
-			simplifyContour(temp, maxError)
+			simplifyContour(&temp, maxError)
 
 			// Store contour.
-			cont.nverts = temp.nverts
-			if cont.nverts > 0 {
-				cont.verts = make([]uint8, 4*temp.nverts)
+			cont.Nverts = temp.Nverts
+			if cont.Nverts > 0 {
+				cont.Verts = make([]uint8, 4*temp.Nverts)
+				if cont.Verts == nil {
+					return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+				}
 
-				j := temp.nverts - 1
-				for i := int32(0); i < temp.nverts; i++ {
-					dst := cont.verts[j*4:]
-					v := temp.verts[j*4:]
-					vn := temp.verts[i*4:]
+				for i, j := int32(0), temp.Nverts-1; i < temp.Nverts; j, i = i, i+1 {
+					dst := cont.Verts[j*4:]
+					v := temp.Verts[j*4:]
+					vn := temp.Verts[i*4:]
 					nei := vn[3] // The neighbour reg is stored at segment vertex of a segment.
-					shouldRemove, lh := getCornerHeight(layer, int32(v[0]), int32(v[1]), int32(v[2]), walkableClimb)
+					shouldRemove := false
+					lh := getCornerHeight(layer, int32(v[0]), int32(v[1]), int32(v[2]),
+						walkableClimb, &shouldRemove)
 
 					dst[0] = v[0]
 					dst[1] = lh
@@ -727,7 +752,6 @@ func dtBuildTileCacheContours(layer *DtTileCacheLayer, walkableClimb int32, maxE
 					if shouldRemove {
 						dst[3] |= 0x80
 					}
-					j = i
 				}
 			}
 		}
@@ -736,14 +760,12 @@ func dtBuildTileCacheContours(layer *DtTileCacheLayer, walkableClimb int32, maxE
 	return detour.DT_SUCCESS
 }
 
-const (
-	VERTEX_BUCKET_COUNT2 int32  = (1 << 8)
-	h1                   uint32 = 0x8da6b343 // Large multiplicative constants;
-	h2                   uint32 = 0xd8163841 // here arbitrarily chosen primes
-	h3                   uint32 = 0xcb1ab31f
-)
+const VERTEX_BUCKET_COUNT2 int32 = (1 << 8)
 
 func computeVertexHash2(x, y, z int32) int32 {
+	const h1 uint32 = 0x8da6b343 // Large multiplicative constants;
+	const h2 uint32 = 0xd8163841 // here arbitrarily chosen primes
+	const h3 uint32 = 0xcb1ab31f
 	n := h1*uint32(x) + h2*uint32(y) + h3*uint32(z)
 	return int32(n & uint32(VERTEX_BUCKET_COUNT2-1))
 }
@@ -774,12 +796,14 @@ func addVertex(x, y, z uint16, verts, firstVert, nextVert []uint16, nv *int32) u
 }
 
 type rcEdge struct {
-	vert     [2]uint16
-	polyEdge [2]uint16
-	poly     [2]uint16
+	Vert     [2]uint16
+	PolyEdge [2]uint16
+	Poly     [2]uint16
 }
 
-func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int32, lcset *DtTileCacheContourSet) bool {
+func buildMeshAdjacency(polys []uint16, npolys int32,
+	verts []uint16, nverts int32,
+	lcset *DtTileCacheContourSet) bool {
 	// Based on code by Eric Lengyel from:
 	// http://www.terathon.com/code/edges.php
 
@@ -808,12 +832,12 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 			}
 			if v0 < v1 {
 				edge := &edges[edgeCount]
-				edge.vert[0] = v0
-				edge.vert[1] = v1
-				edge.poly[0] = uint16(i)
-				edge.polyEdge[0] = uint16(j)
-				edge.poly[1] = uint16(i)
-				edge.polyEdge[1] = 0xff
+				edge.Vert[0] = v0
+				edge.Vert[1] = v1
+				edge.Poly[0] = uint16(i)
+				edge.PolyEdge[0] = uint16(j)
+				edge.Poly[1] = uint16(i)
+				edge.PolyEdge[1] = 0xff
 				// Insert edge
 				nextEdge[edgeCount] = firstEdge[v0]
 				firstEdge[v0] = uint16(edgeCount)
@@ -837,9 +861,9 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 				found := false
 				for e := firstEdge[v1]; e != DT_TILECACHE_NULL_IDX; e = nextEdge[e] {
 					edge := &edges[e]
-					if edge.vert[1] == v0 && edge.poly[0] == edge.poly[1] {
-						edge.poly[1] = uint16(i)
-						edge.polyEdge[1] = uint16(j)
+					if edge.Vert[1] == v0 && edge.Poly[0] == edge.Poly[1] {
+						edge.Poly[1] = uint16(i)
+						edge.PolyEdge[1] = uint16(j)
 						found = true
 						break
 					}
@@ -847,12 +871,12 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 				if !found {
 					// Matching edge not found, it is an open edge, add it.
 					edge := &edges[edgeCount]
-					edge.vert[0] = v1
-					edge.vert[1] = v0
-					edge.poly[0] = uint16(i)
-					edge.polyEdge[0] = uint16(j)
-					edge.poly[1] = uint16(i)
-					edge.polyEdge[1] = 0xff
+					edge.Vert[0] = v1
+					edge.Vert[1] = v0
+					edge.Poly[0] = uint16(i)
+					edge.PolyEdge[0] = uint16(j)
+					edge.Poly[1] = uint16(i)
+					edge.PolyEdge[1] = 0xff
 					// Insert edge
 					nextEdge[edgeCount] = firstEdge[v1]
 					firstEdge[v1] = uint16(edgeCount)
@@ -863,16 +887,16 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 	}
 
 	// Mark portal edges.
-	for i := int32(0); i < lcset.nconts; i++ {
-		cont := &lcset.conts[i]
-		if cont.nverts < 3 {
+	for i := int32(0); i < lcset.Nconts; i++ {
+		cont := &lcset.Conts[i]
+		if cont.Nverts < 3 {
 			continue
 		}
 
-		k := cont.nverts - 1
-		for j := int32(0); j < cont.nverts; j++ {
-			va := cont.verts[k*4:]
-			vb := cont.verts[j*4:]
+		k := cont.Nverts - 1
+		for j := int32(0); j < cont.Nverts; j++ {
+			va := cont.Verts[k*4:]
+			vb := cont.Verts[j*4:]
 			dir := va[3] & 0xf
 			if dir == 0xf {
 				continue
@@ -891,11 +915,11 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 				for m := int32(0); m < edgeCount; m++ {
 					e := &edges[m]
 					// Skip connected edges.
-					if e.poly[0] != e.poly[1] {
+					if e.Poly[0] != e.Poly[1] {
 						continue
 					}
-					eva := verts[e.vert[0]*3:]
-					evb := verts[e.vert[1]*3:]
+					eva := verts[e.Vert[0]*3:]
+					evb := verts[e.Vert[1]*3:]
 					if eva[0] == x && evb[0] == x {
 						ezmin := eva[2]
 						ezmax := evb[2]
@@ -905,7 +929,7 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 						}
 						if overlapRangeExl(zmin, zmax, ezmin, ezmax) {
 							// Reuse the other polyedge to store dir.
-							e.polyEdge[1] = uint16(dir)
+							e.PolyEdge[1] = uint16(dir)
 						}
 					}
 				}
@@ -921,11 +945,11 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 				for m := int32(0); m < edgeCount; m++ {
 					e := &edges[m]
 					// Skip connected edges.
-					if e.poly[0] != e.poly[1] {
+					if e.Poly[0] != e.Poly[1] {
 						continue
 					}
-					eva := verts[e.vert[0]*3:]
-					evb := verts[e.vert[1]*3:]
+					eva := verts[e.Vert[0]*3:]
+					evb := verts[e.Vert[1]*3:]
 					if eva[2] == z && evb[2] == z {
 						exmin := eva[0]
 						exmax := evb[0]
@@ -935,7 +959,7 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 						}
 						if overlapRangeExl(xmin, xmax, exmin, exmax) {
 							// Reuse the other polyedge to store dir.
-							e.polyEdge[1] = uint16(dir)
+							e.PolyEdge[1] = uint16(dir)
 						}
 					}
 				}
@@ -947,14 +971,14 @@ func buildMeshAdjacency(polys []uint16, npolys int32, verts []uint16, nverts int
 	// Store adjacency
 	for i := int32(0); i < edgeCount; i++ {
 		e := &edges[i]
-		if e.poly[0] != e.poly[1] {
-			p0 := polys[int32(e.poly[0])*MAX_VERTS_PER_POLY*2:]
-			p1 := polys[int32(e.poly[1])*MAX_VERTS_PER_POLY*2:]
-			p0[MAX_VERTS_PER_POLY+int32(e.polyEdge[0])] = e.poly[1]
-			p1[MAX_VERTS_PER_POLY+int32(e.polyEdge[1])] = e.poly[0]
-		} else if e.polyEdge[1] != 0xff {
-			p0 := polys[int32(e.poly[0])*MAX_VERTS_PER_POLY*2:]
-			p0[MAX_VERTS_PER_POLY+int32(e.polyEdge[0])] = 0x8000 | uint16(e.polyEdge[1])
+		if e.Poly[0] != e.Poly[1] {
+			p0 := polys[int32(e.Poly[0])*MAX_VERTS_PER_POLY*2:]
+			p1 := polys[int32(e.Poly[1])*MAX_VERTS_PER_POLY*2:]
+			p0[MAX_VERTS_PER_POLY+int32(e.PolyEdge[0])] = e.Poly[1]
+			p1[MAX_VERTS_PER_POLY+int32(e.PolyEdge[1])] = e.Poly[0]
+		} else if e.PolyEdge[1] != 0xff {
+			p0 := polys[int32(e.Poly[0])*MAX_VERTS_PER_POLY*2:]
+			p0[MAX_VERTS_PER_POLY+int32(e.PolyEdge[0])] = 0x8000 | uint16(e.PolyEdge[1])
 		}
 
 	}
@@ -1309,8 +1333,8 @@ func pushBack(v uint16, arr []uint16, an *int32) {
 func canRemoveVertex(mesh *DtTileCachePolyMesh, rem uint16) bool {
 	// Count number of polygons to remove.
 	var numRemovedVerts, numTouchedVerts, numRemainingEdges int32
-	for i := int32(0); i < mesh.npolys; i++ {
-		p := mesh.polys[i*MAX_VERTS_PER_POLY*2:]
+	for i := int32(0); i < mesh.Npolys; i++ {
+		p := mesh.Polys[i*MAX_VERTS_PER_POLY*2:]
 		nv := countPolyVerts(p)
 		var numRemoved, numVerts int32
 		for j := int32(0); j < nv; j++ {
@@ -1344,8 +1368,8 @@ func canRemoveVertex(mesh *DtTileCachePolyMesh, rem uint16) bool {
 	var edges [MAX_REM_EDGES]uint16
 	var nedges int32
 
-	for i := int32(0); i < mesh.npolys; i++ {
-		p := mesh.polys[i*MAX_VERTS_PER_POLY*2:]
+	for i := int32(0); i < mesh.Npolys; i++ {
+		p := mesh.Polys[i*MAX_VERTS_PER_POLY*2:]
 		nv := countPolyVerts(p)
 
 		// Collect edges which touches the removed vertex.
@@ -1402,8 +1426,8 @@ func canRemoveVertex(mesh *DtTileCachePolyMesh, rem uint16) bool {
 func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.DtStatus {
 	// Count number of polygons to remove.
 	var numRemovedVerts int32
-	for i := int32(0); i < mesh.npolys; i++ {
-		p := mesh.polys[i*MAX_VERTS_PER_POLY*2:]
+	for i := int32(0); i < mesh.Npolys; i++ {
+		p := mesh.Polys[i*MAX_VERTS_PER_POLY*2:]
 		nv := countPolyVerts(p)
 		for j := int32(0); j < nv; j++ {
 			if p[j] == rem {
@@ -1416,8 +1440,8 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 	var edges [MAX_REM_EDGES * 3]uint16
 	var hole, harea [MAX_REM_EDGES]uint16
 
-	for i := int32(0); i < mesh.npolys; i++ {
-		p := mesh.polys[i*MAX_VERTS_PER_POLY*2:]
+	for i := int32(0); i < mesh.Npolys; i++ {
+		p := mesh.Polys[i*MAX_VERTS_PER_POLY*2:]
 		nv := countPolyVerts(p)
 		hasRem := false
 		for j := int32(0); j < nv; j++ {
@@ -1436,33 +1460,33 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 					e := edges[nedges*3:]
 					e[0] = p[k]
 					e[1] = p[j]
-					e[2] = uint16(mesh.areas[i])
+					e[2] = uint16(mesh.Areas[i])
 					nedges++
 				}
 				k = j
 			}
 			// Remove the polygon.
-			p2 := mesh.polys[(mesh.npolys-1)*MAX_VERTS_PER_POLY*2:]
+			p2 := mesh.Polys[(mesh.Npolys-1)*MAX_VERTS_PER_POLY*2:]
 			copy(p, p2[:MAX_VERTS_PER_POLY])
 			detour.MemsetUInt16(p[MAX_VERTS_PER_POLY:MAX_VERTS_PER_POLY*2], 0xff)
 
-			mesh.areas[i] = mesh.areas[mesh.npolys-1]
-			mesh.npolys--
+			mesh.Areas[i] = mesh.Areas[mesh.Npolys-1]
+			mesh.Npolys--
 			i--
 		}
 	}
 
 	// Remove vertex.
-	for i := int32(rem); i < mesh.nverts; i++ {
-		mesh.verts[i*3+0] = mesh.verts[(i+1)*3+0]
-		mesh.verts[i*3+1] = mesh.verts[(i+1)*3+1]
-		mesh.verts[i*3+2] = mesh.verts[(i+1)*3+2]
+	for i := int32(rem); i < mesh.Nverts; i++ {
+		mesh.Verts[i*3+0] = mesh.Verts[(i+1)*3+0]
+		mesh.Verts[i*3+1] = mesh.Verts[(i+1)*3+1]
+		mesh.Verts[i*3+2] = mesh.Verts[(i+1)*3+2]
 	}
-	mesh.nverts--
+	mesh.Nverts--
 
 	// Adjust indices to match the removed vertex layout.
-	for i := int32(0); i < mesh.npolys; i++ {
-		p := mesh.polys[i*MAX_VERTS_PER_POLY*2:]
+	for i := int32(0); i < mesh.Npolys; i++ {
+		p := mesh.Polys[i*MAX_VERTS_PER_POLY*2:]
 		nv := countPolyVerts(p)
 		for j := int32(0); j < nv; j++ {
 			if p[j] > rem {
@@ -1536,9 +1560,9 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 	// Generate temp vertex array for triangulation.
 	for i := int32(0); i < nhole; i++ {
 		pi := hole[i]
-		tverts[i*4+0] = uint8(mesh.verts[pi*3+0])
-		tverts[i*4+1] = uint8(mesh.verts[pi*3+1])
-		tverts[i*4+2] = uint8(mesh.verts[pi*3+2])
+		tverts[i*4+0] = uint8(mesh.Verts[pi*3+0])
+		tverts[i*4+1] = uint8(mesh.Verts[pi*3+1])
+		tverts[i*4+2] = uint8(mesh.Verts[pi*3+2])
 		tverts[i*4+3] = 0
 		tpoly[i] = uint16(i)
 	}
@@ -1585,7 +1609,7 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 				pj := polys[j*MAX_VERTS_PER_POLY:]
 				for k := j + 1; k < npolys; k++ {
 					pk := polys[k*MAX_VERTS_PER_POLY:]
-					ea, eb, v := getPolyMergeValue(pj, pk, mesh.verts)
+					ea, eb, v := getPolyMergeValue(pj, pk, mesh.Verts)
 					if v > bestMergeVal {
 						bestMergeVal = v
 						bestPa = j
@@ -1613,17 +1637,17 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 
 	// Store polygons.
 	for i := int32(0); i < npolys; i++ {
-		if mesh.npolys >= maxTris {
+		if mesh.Npolys >= maxTris {
 			break
 		}
-		p := mesh.polys[mesh.npolys*MAX_VERTS_PER_POLY*2:]
+		p := mesh.Polys[mesh.Npolys*MAX_VERTS_PER_POLY*2:]
 		detour.MemsetUInt16(p[:MAX_VERTS_PER_POLY*2], 0xff)
 		for j := int32(0); j < MAX_VERTS_PER_POLY; j++ {
 			p[j] = polys[i*MAX_VERTS_PER_POLY+j]
 		}
-		mesh.areas[mesh.npolys] = pareas[i]
-		mesh.npolys++
-		if mesh.npolys > maxTris {
+		mesh.Areas[mesh.Npolys] = pareas[i]
+		mesh.Npolys++
+		if mesh.Npolys > maxTris {
 			return detour.DT_FAILURE | detour.DT_BUFFER_TOO_SMALL
 		}
 	}
@@ -1631,36 +1655,36 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 	return detour.DT_SUCCESS
 }
 
-func dtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePolyMesh) detour.DtStatus {
+func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePolyMesh) detour.DtStatus {
 	var maxVertices, maxTris, maxVertsPerCont int32
-	for i := int32(0); i < lcset.nconts; i++ {
+	for i := int32(0); i < lcset.Nconts; i++ {
 		// Skip null contours.
-		if lcset.conts[i].nverts < 3 {
+		if lcset.Conts[i].Nverts < 3 {
 			continue
 		}
-		maxVertices += lcset.conts[i].nverts
-		maxTris += lcset.conts[i].nverts - 2
-		maxVertsPerCont = detour.DtMaxInt32(maxVertsPerCont, lcset.conts[i].nverts)
+		maxVertices += lcset.Conts[i].Nverts
+		maxTris += lcset.Conts[i].Nverts - 2
+		maxVertsPerCont = detour.DtMaxInt32(maxVertsPerCont, lcset.Conts[i].Nverts)
 	}
 
 	// TODO: warn about too many vertices?
 
-	mesh.nvp = MAX_VERTS_PER_POLY
+	mesh.Nvp = MAX_VERTS_PER_POLY
 
 	vflags := make([]uint8, maxVertices)
 
-	mesh.verts = make([]uint16, maxVertices*3)
+	mesh.Verts = make([]uint16, maxVertices*3)
 
-	mesh.polys = make([]uint16, maxTris*MAX_VERTS_PER_POLY*2)
+	mesh.Polys = make([]uint16, maxTris*MAX_VERTS_PER_POLY*2)
 
-	mesh.areas = make([]uint8, maxTris)
+	mesh.Areas = make([]uint8, maxTris)
 
-	mesh.flags = make([]uint16, maxTris)
+	mesh.Flags = make([]uint16, maxTris)
 
-	mesh.nverts = 0
-	mesh.npolys = 0
+	mesh.Nverts = 0
+	mesh.Npolys = 0
 
-	detour.MemsetUInt16(mesh.polys[:], 0xff)
+	detour.MemsetUInt16(mesh.Polys[:], 0xff)
 
 	var firstVert [VERTEX_BUCKET_COUNT2]uint16
 	detour.MemsetUInt16(firstVert[:], DT_TILECACHE_NULL_IDX)
@@ -1670,30 +1694,30 @@ func dtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 	tris := make([]uint16, maxVertsPerCont*3)
 	polys := make([]uint16, maxVertsPerCont*MAX_VERTS_PER_POLY)
 
-	for i := int32(0); i < lcset.nconts; i++ {
-		cont := &lcset.conts[i]
+	for i := int32(0); i < lcset.Nconts; i++ {
+		cont := &lcset.Conts[i]
 
 		// Skip null contours.
-		if cont.nverts < 3 {
+		if cont.Nverts < 3 {
 			continue
 		}
 
 		// Triangulate contour
-		for j := int32(0); j < cont.nverts; j++ {
+		for j := int32(0); j < cont.Nverts; j++ {
 			indices[j] = uint16(j)
 		}
 
-		ntris := triangulate(cont.nverts, cont.verts, indices[:], tris[:])
+		ntris := triangulate(cont.Nverts, cont.Verts, indices[:], tris[:])
 		if ntris <= 0 {
 			// TODO: issue warning!
 			ntris = -ntris
 		}
 
 		// Add and merge vertices.
-		for j := int32(0); j < cont.nverts; j++ {
-			v := cont.verts[j*4:]
+		for j := int32(0); j < cont.Nverts; j++ {
+			v := cont.Verts[j*4:]
 			indices[j] = addVertex(uint16(v[0]), uint16(v[1]), uint16(v[2]),
-				mesh.verts, firstVert[:], nextVert[:], &mesh.nverts)
+				mesh.Verts, firstVert[:], nextVert[:], &mesh.Nverts)
 			if v[3]&0x80 > 0 {
 				// This vertex should be removed.
 				vflags[indices[j]] = 1
@@ -1727,7 +1751,7 @@ func dtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 					pj := polys[j*MAX_VERTS_PER_POLY:]
 					for k := j + 1; k < npolys; k++ {
 						pk := polys[k*MAX_VERTS_PER_POLY:]
-						ea, eb, v := getPolyMergeValue(pj, pk, mesh.verts)
+						ea, eb, v := getPolyMergeValue(pj, pk, mesh.Verts)
 						if v > bestMergeVal {
 							bestMergeVal = v
 							bestPa = j
@@ -1754,22 +1778,22 @@ func dtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 
 		// Store polygons.
 		for j := int32(0); j < npolys; j++ {
-			p := mesh.polys[mesh.npolys*MAX_VERTS_PER_POLY*2:]
+			p := mesh.Polys[mesh.Npolys*MAX_VERTS_PER_POLY*2:]
 			q := polys[j*MAX_VERTS_PER_POLY:]
 			for k := int32(0); k < MAX_VERTS_PER_POLY; k++ {
 				p[k] = q[k]
 			}
 
-			mesh.areas[mesh.npolys] = cont.area
-			mesh.npolys++
-			if mesh.npolys > maxTris {
+			mesh.Areas[mesh.Npolys] = cont.Area
+			mesh.Npolys++
+			if mesh.Npolys > maxTris {
 				return detour.DT_FAILURE | detour.DT_BUFFER_TOO_SMALL
 			}
 		}
 	}
 
 	// Remove edge vertices.
-	for i := int32(0); i < mesh.nverts; i++ {
+	for i := int32(0); i < mesh.Nverts; i++ {
 		if vflags[i] > 0 {
 			if !canRemoveVertex(mesh, uint16(i)) {
 				continue
@@ -1779,8 +1803,8 @@ func dtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 				return status
 			}
 			// Remove vertex
-			// Note: mesh.nverts is already decremented inside removeVertex()!
-			for j := i; j < mesh.nverts; j++ {
+			// Note: mesh.Nverts is already decremented inside removeVertex()!
+			for j := i; j < mesh.Nverts; j++ {
 				vflags[j] = vflags[j+1]
 			}
 			i--
@@ -1788,14 +1812,14 @@ func dtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 	}
 
 	// Calculate adjacency.
-	if !buildMeshAdjacency(mesh.polys, mesh.npolys, mesh.verts, mesh.nverts, lcset) {
+	if !buildMeshAdjacency(mesh.Polys, mesh.Npolys, mesh.Verts, mesh.Nverts, lcset) {
 		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
 	}
 
 	return detour.DT_SUCCESS
 }
 
-func dtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32, pos []float32, radius, height float32, areaId uint8) detour.DtStatus {
+func DtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32, pos []float32, radius, height float32, areaId uint8) detour.DtStatus {
 	var bmin, bmax [3]float32
 	bmin[0] = pos[0] - radius
 	bmin[1] = pos[1]
@@ -1805,8 +1829,8 @@ func dtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32,
 	bmax[2] = pos[2] + radius
 	r2 := detour.DtSqrFloat32(radius/cs + 0.5)
 
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 	ics := 1.0 / cs
 	ich := 1.0 / ch
 
@@ -1853,20 +1877,20 @@ func dtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32,
 			if dx*dx+dz*dz > r2 {
 				continue
 			}
-			y := int32(layer.heights[x+z*w])
+			y := int32(layer.Heights[x+z*w])
 			if y < miny || y > maxy {
 				continue
 			}
-			layer.areas[x+z*w] = areaId
+			layer.Areas[x+z*w] = areaId
 		}
 	}
 
 	return detour.DT_SUCCESS
 }
 
-func dtMarkBoxArea1(layer *DtTileCacheLayer, orig []float32, cs, ch float32, bmin, bmax []float32, areaId uint8) detour.DtStatus {
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+func DtMarkBoxArea1(layer *DtTileCacheLayer, orig []float32, cs, ch float32, bmin, bmax []float32, areaId uint8) detour.DtStatus {
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 	ics := 1.0 / cs
 	ich := 1.0 / ch
 
@@ -1905,20 +1929,20 @@ func dtMarkBoxArea1(layer *DtTileCacheLayer, orig []float32, cs, ch float32, bmi
 
 	for z := minz; z <= maxz; z++ {
 		for x := minx; x <= maxx; x++ {
-			y := int32(layer.heights[x+z*w])
+			y := int32(layer.Heights[x+z*w])
 			if y < miny || y > maxy {
 				continue
 			}
-			layer.areas[x+z*w] = areaId
+			layer.Areas[x+z*w] = areaId
 		}
 	}
 
 	return detour.DT_SUCCESS
 }
 
-func dtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, center, halfExtents, rotAux []float32, areaId uint8) detour.DtStatus {
-	w := int32(layer.header.width)
-	h := int32(layer.header.height)
+func DtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, center, halfExtents, rotAux []float32, areaId uint8) detour.DtStatus {
+	w := int32(layer.Header.Width)
+	h := int32(layer.Header.Height)
 	ics := 1.0 / cs
 	ich := 1.0 / ch
 
@@ -1973,11 +1997,11 @@ func dtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, cen
 			if zrot > zhalf || zrot < -zhalf {
 				continue
 			}
-			y := int32(layer.heights[x+z*w])
+			y := int32(layer.Heights[x+z*w])
 			if y < miny || y > maxy {
 				continue
 			}
-			layer.areas[x+z*w] = areaId
+			layer.Areas[x+z*w] = areaId
 		}
 	}
 
@@ -1986,7 +2010,7 @@ func dtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, cen
 
 func dtBuildTileCacheLayer(comp DtTileCacheCompressor, header *DtTileCacheLayerHeader, heights, areas, cons []uint8) (status detour.DtStatus, outData []uint8, outDataSize int32) {
 	headerSize := int32(detour.DtAlign4(int(DtTileCacheLayerHeaderSize)))
-	gridSize := int32(header.width) * int32(header.height)
+	gridSize := int32(header.Width) * int32(header.Height)
 	maxDataSize := headerSize + comp.MaxCompressedSize(gridSize*3)
 	data := make([]uint8, maxDataSize)
 
@@ -2005,7 +2029,7 @@ func dtBuildTileCacheLayer(comp DtTileCacheCompressor, header *DtTileCacheLayerH
 	compressed := data[headerSize:]
 	maxCompressedSize := maxDataSize - headerSize
 	var compressedSize int32
-	compressedSize, status = comp.Compress(buffer, bufferSize, compressed, maxCompressedSize)
+	status = comp.Compress(buffer, bufferSize, compressed, maxCompressedSize, &compressedSize)
 	if detour.DtStatusFailed(status) {
 		return status, nil, 0
 	}
@@ -2020,48 +2044,67 @@ func dtFreeTileCacheLayer(layer *DtTileCacheLayer) {
 
 }
 
-func dtDecompressTileCacheLayer(comp DtTileCacheCompressor, compressed []uint8, compressedSize int32) (status detour.DtStatus, layerOut *DtTileCacheLayer) {
+func DtDecompressTileCacheLayer(comp DtTileCacheCompressor, compressed []uint8, compressedSize int32, layerOut **DtTileCacheLayer) detour.DtStatus {
+	detour.DtAssert(comp != nil)
+
+	if layerOut == nil {
+		return detour.DT_FAILURE | detour.DT_INVALID_PARAM
+	}
 	if compressed == nil {
-		status = detour.DT_FAILURE | detour.DT_INVALID_PARAM
-		return
+		return detour.DT_FAILURE | detour.DT_INVALID_PARAM
 	}
 
-	layerOut = nil
+	*layerOut = nil
 
 	compressedHeader := (*DtTileCacheLayerHeader)(unsafe.Pointer(&compressed[0]))
-	if compressedHeader.magic != DT_TILECACHE_MAGIC {
-		status = detour.DT_FAILURE | detour.DT_WRONG_MAGIC
-		return
+	if compressedHeader.Magic != DT_TILECACHE_MAGIC {
+		return detour.DT_FAILURE | detour.DT_WRONG_MAGIC
 	}
-	if compressedHeader.version != DT_TILECACHE_VERSION {
-		status = detour.DT_FAILURE | detour.DT_WRONG_VERSION
-		return
+	if compressedHeader.Version != DT_TILECACHE_VERSION {
+		return detour.DT_FAILURE | detour.DT_WRONG_VERSION
 	}
 
+	layerSize := int32(detour.DtAlign4(int(DtTileCacheLayerSize)))
 	headerSize := int32(detour.DtAlign4(int(DtTileCacheLayerHeaderSize)))
-	gridSize := int32(compressedHeader.width) * int32(compressedHeader.height)
+	gridSize := int32(compressedHeader.Width) * int32(compressedHeader.Height)
+	bufferSize := layerSize + headerSize + gridSize*4
 
-	header := &DtTileCacheLayerHeader{}
-	layerOut = &DtTileCacheLayer{}
-	grids := make([]uint8, gridSize*4)
+	buffer := make([]byte, bufferSize)
+	if buffer == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
+
+	layer := (*DtTileCacheLayer)(unsafe.Pointer(&buffer[0]))
+	header := (*DtTileCacheLayerHeader)(unsafe.Pointer(uintptr(unsafe.Pointer(&buffer[0])) + uintptr(layerSize)))
+
+	var grids []byte
+	gridsSize := bufferSize - (layerSize + headerSize)
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&grids)))
+	sliceHeader.Cap = int(gridsSize)
+	sliceHeader.Len = int(gridsSize)
+	sliceHeader.Data = uintptr(unsafe.Pointer(&buffer[0])) + uintptr(layerSize+headerSize)
 
 	// Copy header
 	*header = *compressedHeader
 	// Decompress grid.
-	// var size int32
-	_, status = comp.Decompress(compressed[headerSize:], compressedSize-headerSize, grids, gridSize*4)
+	var size int32
+	status := comp.Decompress(compressed[headerSize:], compressedSize-headerSize, grids, gridsSize, &size)
+	detour.DtIgnoreUnused(size)
+
 	if detour.DtStatusFailed(status) {
-		return
+		buffer = nil
+		return status
 	}
 
-	layerOut.header = header
-	layerOut.heights = grids
-	layerOut.areas = grids[gridSize:]
-	layerOut.cons = grids[gridSize*2:]
-	layerOut.regs = grids[gridSize*3:]
+	layer.Header = header
+	layer.Heights = grids
+	layer.Areas = grids[gridSize:]
+	layer.Cons = grids[gridSize*2:]
+	layer.Regs = grids[gridSize*3:]
 
-	status = detour.DT_SUCCESS
-	return
+	*layerOut = layer
+
+	return detour.DT_SUCCESS
 }
 
 func dtTileCacheHeaderSwapEndian(data []uint8, dataSize int32) bool {
@@ -2073,24 +2116,24 @@ func dtTileCacheHeaderSwapEndian(data []uint8, dataSize int32) bool {
 	detour.DtSwapEndianInt32(&swappedMagic)
 	detour.DtSwapEndianInt32(&swappedVersion)
 
-	if (header.magic != DT_TILECACHE_MAGIC || header.version != DT_TILECACHE_VERSION) &&
-		(header.magic != swappedMagic || header.version != swappedVersion) {
+	if (header.Magic != DT_TILECACHE_MAGIC || header.Version != DT_TILECACHE_VERSION) &&
+		(header.Magic != swappedMagic || header.Version != swappedVersion) {
 		return false
 	}
 
-	detour.DtSwapEndianInt32(&header.magic)
-	detour.DtSwapEndianInt32(&header.version)
-	detour.DtSwapEndianInt32(&header.tx)
-	detour.DtSwapEndianInt32(&header.ty)
-	detour.DtSwapEndianInt32(&header.tlayer)
-	detour.DtSwapEndianFloat32(&header.bmin[0])
-	detour.DtSwapEndianFloat32(&header.bmin[1])
-	detour.DtSwapEndianFloat32(&header.bmin[2])
-	detour.DtSwapEndianFloat32(&header.bmax[0])
-	detour.DtSwapEndianFloat32(&header.bmax[1])
-	detour.DtSwapEndianFloat32(&header.bmax[2])
-	detour.DtSwapEndianUInt16(&header.hmin)
-	detour.DtSwapEndianUInt16(&header.hmax)
+	detour.DtSwapEndianInt32(&header.Magic)
+	detour.DtSwapEndianInt32(&header.Version)
+	detour.DtSwapEndianInt32(&header.Tx)
+	detour.DtSwapEndianInt32(&header.Ty)
+	detour.DtSwapEndianInt32(&header.Tlayer)
+	detour.DtSwapEndianFloat32(&header.Bmin[0])
+	detour.DtSwapEndianFloat32(&header.Bmin[1])
+	detour.DtSwapEndianFloat32(&header.Bmin[2])
+	detour.DtSwapEndianFloat32(&header.Bmax[0])
+	detour.DtSwapEndianFloat32(&header.Bmax[1])
+	detour.DtSwapEndianFloat32(&header.Bmax[2])
+	detour.DtSwapEndianUInt16(&header.Hmin)
+	detour.DtSwapEndianUInt16(&header.Hmax)
 
 	// width, height, minx, maxx, miny, maxy are unsigned char, no need to swap.
 
