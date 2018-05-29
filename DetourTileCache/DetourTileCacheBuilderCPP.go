@@ -169,7 +169,7 @@ func DtBuildTileCacheRegions(layer *DtTileCacheLayer, walkableClimb int32) detou
 
 	for y := int32(0); y < h; y++ {
 		if regId > 0 {
-			detour.MemsetUInt8(prevCount[:regId], 0)
+			detour.Memset(uintptr(unsafe.Pointer(&(prevCount[0]))), 0, int(regId))
 		}
 		var sweepId uint8
 
@@ -893,8 +893,7 @@ func buildMeshAdjacency(polys []uint16, npolys int32,
 			continue
 		}
 
-		k := cont.Nverts - 1
-		for j := int32(0); j < cont.Nverts; j++ {
+		for j, k := int32(0), cont.Nverts-1; j < cont.Nverts; k, j = j, j+1 {
 			va := cont.Verts[k*4:]
 			vb := cont.Verts[j*4:]
 			dir := va[3] & 0xf
@@ -964,7 +963,6 @@ func buildMeshAdjacency(polys []uint16, npolys int32,
 					}
 				}
 			}
-			k = j
 		}
 	}
 
@@ -1222,19 +1220,18 @@ func uleft(a, b, c []uint16) bool {
 	return (int32(b[0])-int32(a[0]))*(int32(c[2])-int32(a[2]))-(int32(c[0])-int32(a[0]))*(int32(b[2])-int32(a[2])) < 0
 }
 
-func getPolyMergeValue(pa, pb, verts []uint16) (ea, eb, v int32) {
+func getPolyMergeValue(pa, pb, verts []uint16, ea, eb *int32) int32 {
 	na := countPolyVerts(pa)
 	nb := countPolyVerts(pb)
 
 	// If the merged polygon would be too big, do not merge.
 	if na+nb-2 > MAX_VERTS_PER_POLY {
-		v = -1
-		return
+		return -1
 	}
 
 	// Check if the polygons share an edge.
-	ea = -1
-	eb = -1
+	*ea = -1
+	*eb = -1
 
 	for i := int32(0); i < na; i++ {
 		va0 := pa[i]
@@ -1251,46 +1248,42 @@ func getPolyMergeValue(pa, pb, verts []uint16) (ea, eb, v int32) {
 				// detour.DtSwapUInt16(&vb0, &vb1)
 			}
 			if va0 == vb0 && va1 == vb1 {
-				ea = i
-				eb = j
+				*ea = i
+				*eb = j
 				break
 			}
 		}
 	}
 
 	// No common edge, cannot merge.
-	if ea == -1 || eb == -1 {
-		v = -1
-		return
+	if *ea == -1 || *eb == -1 {
+		return -1
 	}
 
 	// Check to see if the merged polygon would be convex.
 	var va, vb, vc uint16
 
-	va = pa[(ea+na-1)%na]
-	vb = pa[ea]
-	vc = pb[(eb+2)%nb]
+	va = pa[(*ea+na-1)%na]
+	vb = pa[*ea]
+	vc = pb[(*eb+2)%nb]
 	if !uleft(verts[va*3:], verts[vb*3:], verts[vc*3:]) {
-		v = -1
-		return
+		return -1
 	}
 
-	va = pb[(eb+nb-1)%nb]
-	vb = pb[eb]
-	vc = pa[(ea+2)%na]
+	va = pb[(*eb+nb-1)%nb]
+	vb = pb[*eb]
+	vc = pa[(*ea+2)%na]
 	if !uleft(verts[va*3:], verts[vb*3:], verts[vc*3:]) {
-		v = -1
-		return
+		return -1
 	}
 
-	va = pa[ea]
-	vb = pa[(ea+1)%na]
+	va = pa[*ea]
+	vb = pa[(*ea+1)%na]
 
 	dx := int32(verts[va*3+0]) - int32(verts[vb*3+0])
 	dy := int32(verts[va*3+2]) - int32(verts[vb*3+2])
 
-	v = dx*dx + dy*dy
-	return
+	return dx*dx + dy*dy
 }
 
 func mergePolys(pa, pb []uint16, ea, eb int32) {
@@ -1300,7 +1293,7 @@ func mergePolys(pa, pb []uint16, ea, eb int32) {
 	nb := countPolyVerts(pb)
 
 	// Merge polygons.
-	detour.MemsetUInt16(tmp[:], 0xff)
+	detour.Memset(uintptr(unsafe.Pointer(&tmp[0])), 0xff, int(MAX_VERTS_PER_POLY*2))
 
 	var n int32
 	// Add pa
@@ -1373,8 +1366,7 @@ func canRemoveVertex(mesh *DtTileCachePolyMesh, rem uint16) bool {
 		nv := countPolyVerts(p)
 
 		// Collect edges which touches the removed vertex.
-		k := nv - 1
-		for j := int32(0); j < nv; j++ {
+		for j, k := int32(0), nv-1; j < nv; k, j = j, j+1 {
 			if p[j] == rem || p[k] == rem {
 				// Arrange edge so that a=rem.
 				a := p[j]
@@ -1403,7 +1395,6 @@ func canRemoveVertex(mesh *DtTileCachePolyMesh, rem uint16) bool {
 					nedges++
 				}
 			}
-			k = j
 		}
 	}
 
@@ -1451,8 +1442,7 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 		}
 		if hasRem {
 			// Collect edges which does not touch the removed vertex.
-			k := nv - 1
-			for j := int32(0); j < nv; j++ {
+			for j, k := int32(0), nv-1; j < nv; k, j = j, j+1 {
 				if p[j] != rem && p[k] != rem {
 					if nedges >= MAX_REM_EDGES {
 						return detour.DT_FAILURE | detour.DT_BUFFER_TOO_SMALL
@@ -1463,12 +1453,11 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 					e[2] = uint16(mesh.Areas[i])
 					nedges++
 				}
-				k = j
 			}
 			// Remove the polygon.
 			p2 := mesh.Polys[(mesh.Npolys-1)*MAX_VERTS_PER_POLY*2:]
 			copy(p, p2[:MAX_VERTS_PER_POLY])
-			detour.MemsetUInt16(p[MAX_VERTS_PER_POLY:MAX_VERTS_PER_POLY*2], 0xff)
+			detour.Memset(uintptr(unsafe.Pointer(&p[MAX_VERTS_PER_POLY])), 0xff, ShortSize*int(MAX_VERTS_PER_POLY))
 
 			mesh.Areas[i] = mesh.Areas[mesh.Npolys-1]
 			mesh.Npolys--
@@ -1512,7 +1501,7 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 	pushBack(edges[0], hole[:], &nhole)
 	pushBack(edges[2], harea[:], &nharea)
 
-	for nedges > 0 {
+	for nedges != 0 {
 		match := false
 
 		for i := int32(0); i < nedges; i++ {
@@ -1583,7 +1572,7 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 
 	// Build initial polygons.
 	var npolys int32
-	detour.MemsetUInt16(polys[:ntris*MAX_VERTS_PER_POLY], 0xff)
+	detour.Memset(uintptr(unsafe.Pointer(&polys[0])), 0xff, int(ntris*MAX_VERTS_PER_POLY)*ShortSize)
 	for j := int32(0); j < ntris; j++ {
 		t := tris[j*3:]
 		if t[0] != t[1] && t[0] != t[2] && t[1] != t[2] {
@@ -1609,7 +1598,8 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 				pj := polys[j*MAX_VERTS_PER_POLY:]
 				for k := j + 1; k < npolys; k++ {
 					pk := polys[k*MAX_VERTS_PER_POLY:]
-					ea, eb, v := getPolyMergeValue(pj, pk, mesh.Verts)
+					var ea, eb int32
+					v := getPolyMergeValue(pj, pk, mesh.Verts, &ea, &eb)
 					if v > bestMergeVal {
 						bestMergeVal = v
 						bestPa = j
@@ -1641,7 +1631,7 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 			break
 		}
 		p := mesh.Polys[mesh.Npolys*MAX_VERTS_PER_POLY*2:]
-		detour.MemsetUInt16(p[:MAX_VERTS_PER_POLY*2], 0xff)
+		detour.Memset(uintptr(unsafe.Pointer(&p[0])), 0xff, int(MAX_VERTS_PER_POLY*2))
 		for j := int32(0); j < MAX_VERTS_PER_POLY; j++ {
 			p[j] = polys[i*MAX_VERTS_PER_POLY+j]
 		}
@@ -1684,10 +1674,10 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 	mesh.Nverts = 0
 	mesh.Npolys = 0
 
-	detour.MemsetUInt16(mesh.Polys[:], 0xff)
+	detour.Memset(uintptr(unsafe.Pointer(&(mesh.Polys[0]))), 0xff, int(maxTris*MAX_VERTS_PER_POLY*2))
 
 	var firstVert [VERTEX_BUCKET_COUNT2]uint16
-	detour.MemsetUInt16(firstVert[:], DT_TILECACHE_NULL_IDX)
+	detour.Memset(uintptr(unsafe.Pointer(&firstVert[0])), 0xff, int(VERTEX_BUCKET_COUNT2))
 
 	nextVert := make([]uint16, maxVertices)
 	indices := make([]uint16, maxVertsPerCont)
@@ -1726,7 +1716,7 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 
 		// Build initial polygons.
 		var npolys int32
-		detour.MemsetUInt16(polys[:maxVertsPerCont*MAX_VERTS_PER_POLY], 0xff)
+		detour.Memset(uintptr(unsafe.Pointer(&(polys[0]))), 0xff, int(maxVertsPerCont*MAX_VERTS_PER_POLY))
 		for j := int32(0); j < ntris; j++ {
 			t := tris[j*3:]
 			if t[0] != t[1] && t[0] != t[2] && t[1] != t[2] {
@@ -1751,7 +1741,8 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 					pj := polys[j*MAX_VERTS_PER_POLY:]
 					for k := j + 1; k < npolys; k++ {
 						pk := polys[k*MAX_VERTS_PER_POLY:]
-						ea, eb, v := getPolyMergeValue(pj, pk, mesh.Verts)
+						var ea, eb int32
+						v := getPolyMergeValue(pj, pk, mesh.Verts, &ea, &eb)
 						if v > bestMergeVal {
 							bestMergeVal = v
 							bestPa = j

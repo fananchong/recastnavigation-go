@@ -20,6 +20,7 @@ package detour
 
 import (
 	"math"
+	"reflect"
 	"unsafe"
 )
 
@@ -998,14 +999,13 @@ A negative return value indicates:
 
 */
 
-func MemsetUInt8(dst []uint8, val uint8) {
-	for i := 0; i < len(dst); i++ {
-		dst[i] = val
-	}
-}
-
-func MemsetUInt16(dst []uint16, val uint16) {
-	for i := 0; i < len(dst); i++ {
+func Memset(mem uintptr, val uint8, size int) {
+	var dst []byte
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&dst)))
+	sliceHeader.Cap = size
+	sliceHeader.Len = size
+	sliceHeader.Data = mem
+	for i := 0; i < size; i++ {
 		dst[i] = val
 	}
 }

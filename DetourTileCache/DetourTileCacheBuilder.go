@@ -33,6 +33,7 @@ const (
 )
 
 const (
+	ShortSize                  = int(unsafe.Sizeof(uint16(1)))
 	DtTileCacheLayerSize       = unsafe.Sizeof(DtTileCacheLayer{})
 	DtTileCacheLayerHeaderSize = unsafe.Sizeof(DtTileCacheLayerHeader{})
 )
