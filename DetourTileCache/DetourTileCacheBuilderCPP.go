@@ -1631,7 +1631,7 @@ func removeVertex(mesh *DtTileCachePolyMesh, rem uint16, maxTris int32) detour.D
 			break
 		}
 		p := mesh.Polys[mesh.Npolys*MAX_VERTS_PER_POLY*2:]
-		detour.Memset(uintptr(unsafe.Pointer(&p[0])), 0xff, int(MAX_VERTS_PER_POLY*2))
+		detour.Memset(uintptr(unsafe.Pointer(&p[0])), 0xff, ShortSize*int(MAX_VERTS_PER_POLY*2))
 		for j := int32(0); j < MAX_VERTS_PER_POLY; j++ {
 			p[j] = polys[i*MAX_VERTS_PER_POLY+j]
 		}
@@ -1662,27 +1662,57 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 	mesh.Nvp = MAX_VERTS_PER_POLY
 
 	vflags := make([]uint8, maxVertices)
+	if vflags == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	mesh.Verts = make([]uint16, maxVertices*3)
+	if mesh.Verts == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	mesh.Polys = make([]uint16, maxTris*MAX_VERTS_PER_POLY*2)
+	if mesh.Polys == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	mesh.Areas = make([]uint8, maxTris)
+	if mesh.Areas == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	mesh.Flags = make([]uint16, maxTris)
+	if mesh.Flags == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	mesh.Nverts = 0
 	mesh.Npolys = 0
 
-	detour.Memset(uintptr(unsafe.Pointer(&(mesh.Polys[0]))), 0xff, int(maxTris*MAX_VERTS_PER_POLY*2))
+	detour.Memset(uintptr(unsafe.Pointer(&(mesh.Polys[0]))), 0xff, ShortSize*int(maxTris*MAX_VERTS_PER_POLY*2))
 
 	var firstVert [VERTEX_BUCKET_COUNT2]uint16
-	detour.Memset(uintptr(unsafe.Pointer(&firstVert[0])), 0xff, int(VERTEX_BUCKET_COUNT2))
+	detour.Memset(uintptr(unsafe.Pointer(&firstVert[0])), 0xff, ShortSize*int(VERTEX_BUCKET_COUNT2))
 
 	nextVert := make([]uint16, maxVertices)
+	if nextVert == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
+
 	indices := make([]uint16, maxVertsPerCont)
+	if indices == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
+
 	tris := make([]uint16, maxVertsPerCont*3)
+	if tris == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
+
 	polys := make([]uint16, maxVertsPerCont*MAX_VERTS_PER_POLY)
+	if polys == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	for i := int32(0); i < lcset.Nconts; i++ {
 		cont := &lcset.Conts[i]
@@ -1708,7 +1738,7 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 			v := cont.Verts[j*4:]
 			indices[j] = addVertex(uint16(v[0]), uint16(v[1]), uint16(v[2]),
 				mesh.Verts, firstVert[:], nextVert[:], &mesh.Nverts)
-			if v[3]&0x80 > 0 {
+			if v[3]&0x80 != 0 {
 				// This vertex should be removed.
 				vflags[indices[j]] = 1
 			}
@@ -1716,7 +1746,7 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 
 		// Build initial polygons.
 		var npolys int32
-		detour.Memset(uintptr(unsafe.Pointer(&(polys[0]))), 0xff, int(maxVertsPerCont*MAX_VERTS_PER_POLY))
+		detour.Memset(uintptr(unsafe.Pointer(&(polys[0]))), 0xff, ShortSize*int(maxVertsPerCont*MAX_VERTS_PER_POLY))
 		for j := int32(0); j < ntris; j++ {
 			t := tris[j*3:]
 			if t[0] != t[1] && t[0] != t[2] && t[1] != t[2] {
@@ -1734,7 +1764,7 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 		maxVertsPerPoly := MAX_VERTS_PER_POLY
 		if maxVertsPerPoly > 3 {
 			for {
-				// Find best polygons to merge.\
+				// Find best polygons to merge.
 				var bestMergeVal, bestPa, bestPb, bestEa, bestEb int32
 
 				for j := int32(0); j < npolys-1; j++ {
@@ -1785,7 +1815,7 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 
 	// Remove edge vertices.
 	for i := int32(0); i < mesh.Nverts; i++ {
-		if vflags[i] > 0 {
+		if vflags[i] != 0 {
 			if !canRemoveVertex(mesh, uint16(i)) {
 				continue
 			}
@@ -1810,7 +1840,8 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 	return detour.DT_SUCCESS
 }
 
-func DtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32, pos []float32, radius, height float32, areaId uint8) detour.DtStatus {
+func DtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32,
+	pos []float32, radius, height float32, areaId uint8) detour.DtStatus {
 	var bmin, bmax [3]float32
 	bmin[0] = pos[0] - radius
 	bmin[1] = pos[1]
@@ -1879,7 +1910,8 @@ func DtMarkCylinderArea(layer *DtTileCacheLayer, orig []float32, cs, ch float32,
 	return detour.DT_SUCCESS
 }
 
-func DtMarkBoxArea1(layer *DtTileCacheLayer, orig []float32, cs, ch float32, bmin, bmax []float32, areaId uint8) detour.DtStatus {
+func DtMarkBoxArea1(layer *DtTileCacheLayer, orig []float32, cs, ch float32,
+	bmin, bmax []float32, areaId uint8) detour.DtStatus {
 	w := int32(layer.Header.Width)
 	h := int32(layer.Header.Height)
 	ics := 1.0 / cs
@@ -1931,7 +1963,8 @@ func DtMarkBoxArea1(layer *DtTileCacheLayer, orig []float32, cs, ch float32, bmi
 	return detour.DT_SUCCESS
 }
 
-func DtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, center, halfExtents, rotAux []float32, areaId uint8) detour.DtStatus {
+func DtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32,
+	center, halfExtents, rotAux []float32, areaId uint8) detour.DtStatus {
 	w := int32(layer.Header.Width)
 	h := int32(layer.Header.Height)
 	ics := 1.0 / cs
@@ -1999,11 +2032,18 @@ func DtMarkBoxArea2(layer *DtTileCacheLayer, orig []float32, cs, ch float32, cen
 	return detour.DT_SUCCESS
 }
 
-func dtBuildTileCacheLayer(comp DtTileCacheCompressor, header *DtTileCacheLayerHeader, heights, areas, cons []uint8) (status detour.DtStatus, outData []uint8, outDataSize int32) {
+func DtBuildTileCacheLayer(comp DtTileCacheCompressor,
+	header *DtTileCacheLayerHeader,
+	heights, areas, cons []uint8,
+	outData *[]uint8, outDataSize *int32) detour.DtStatus {
+
 	headerSize := int32(detour.DtAlign4(int(DtTileCacheLayerHeaderSize)))
 	gridSize := int32(header.Width) * int32(header.Height)
 	maxDataSize := headerSize + comp.MaxCompressedSize(gridSize*3)
-	data := make([]uint8, maxDataSize)
+	data := make([]byte, maxDataSize)
+	if data == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	// Store header
 	*(*DtTileCacheLayerHeader)(unsafe.Pointer(&data[0])) = *header
@@ -2011,6 +2051,9 @@ func dtBuildTileCacheLayer(comp DtTileCacheCompressor, header *DtTileCacheLayerH
 	// Concatenate grid data for compression.
 	bufferSize := gridSize * 3
 	buffer := make([]uint8, bufferSize)
+	if buffer == nil {
+		return detour.DT_FAILURE | detour.DT_OUT_OF_MEMORY
+	}
 
 	copy(buffer[:gridSize], heights)
 	copy(buffer[gridSize:gridSize*2], areas)
@@ -2020,22 +2063,27 @@ func dtBuildTileCacheLayer(comp DtTileCacheCompressor, header *DtTileCacheLayerH
 	compressed := data[headerSize:]
 	maxCompressedSize := maxDataSize - headerSize
 	var compressedSize int32
-	status = comp.Compress(buffer, bufferSize, compressed, maxCompressedSize, &compressedSize)
+	status := comp.Compress(buffer, bufferSize, compressed, maxCompressedSize, &compressedSize)
 	if detour.DtStatusFailed(status) {
-		return status, nil, 0
+		return status
 	}
 
-	outData = data
-	outDataSize = headerSize + compressedSize
+	*outData = data
+	*outDataSize = headerSize + compressedSize
 
-	return
+	buffer = nil
+
+	return detour.DT_SUCCESS
 }
 
-func dtFreeTileCacheLayer(layer *DtTileCacheLayer) {
+func DtFreeTileCacheLayer(layer *DtTileCacheLayer) {
 
 }
 
-func DtDecompressTileCacheLayer(comp DtTileCacheCompressor, compressed []uint8, compressedSize int32, layerOut **DtTileCacheLayer) detour.DtStatus {
+func DtDecompressTileCacheLayer(comp DtTileCacheCompressor,
+	compressed []uint8, compressedSize int32,
+	layerOut **DtTileCacheLayer) detour.DtStatus {
+
 	detour.DtAssert(comp != nil)
 
 	if layerOut == nil {
@@ -2098,7 +2146,7 @@ func DtDecompressTileCacheLayer(comp DtTileCacheCompressor, compressed []uint8, 
 	return detour.DT_SUCCESS
 }
 
-func dtTileCacheHeaderSwapEndian(data []uint8, dataSize int32) bool {
+func DtTileCacheHeaderSwapEndian(data []uint8, dataSize int32) bool {
 	// dtIgnoreUnused(dataSize)
 	header := (*DtTileCacheLayerHeader)(unsafe.Pointer(&data[0]))
 

@@ -130,6 +130,13 @@ type DtTileCache struct {
 	m_nupdate int32
 }
 
+func (this *DtTileCache) GetCompressor() DtTileCacheCompressor   { return this.m_tcomp }
+func (this *DtTileCache) GetParams() *DtTileCacheParams          { return &this.m_params }
+func (this *DtTileCache) GetTileCount() int                      { return int(this.m_params.MaxTiles) }
+func (this *DtTileCache) GetTile(i int) *DtCompressedTile        { return &this.m_tiles[i] }
+func (this *DtTileCache) GetObstacleCount() int                  { return int(this.m_params.MaxObstacles) }
+func (this *DtTileCache) GetObstacle(i int) *DtTileCacheObstacle { return &this.m_obstacles[i] }
+
 /// Encodes a tile id.
 func (this *DtTileCache) EncodeTileId(salt, it uint32) DtCompressedTileRef {
 	return (DtCompressedTileRef(salt) << this.m_tileBits) | DtCompressedTileRef(it)
