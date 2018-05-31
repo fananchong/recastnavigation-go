@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <fastlz.h>
 #include <DetourNavMeshBuilder.h>
-#include "filter.h"
 
 LinearAllocator::LinearAllocator(const size_t cap)
     : buffer(0)
