@@ -1689,7 +1689,9 @@ func DtBuildTileCachePolyMesh(lcset *DtTileCacheContourSet, mesh *DtTileCachePol
 	mesh.Nverts = 0
 	mesh.Npolys = 0
 
-	detour.Memset(uintptr(unsafe.Pointer(&(mesh.Polys[0]))), 0xff, ShortSize*int(maxTris*MAX_VERTS_PER_POLY*2))
+	if len(mesh.Polys) != 0 {
+		detour.Memset(uintptr(unsafe.Pointer(&(mesh.Polys[0]))), 0xff, ShortSize*int(maxTris*MAX_VERTS_PER_POLY*2))
+	}
 
 	var firstVert [VERTEX_BUCKET_COUNT2]uint16
 	detour.Memset(uintptr(unsafe.Pointer(&firstVert[0])), 0xff, ShortSize*int(VERTEX_BUCKET_COUNT2))
