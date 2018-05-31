@@ -2,6 +2,7 @@
 #include <cassert>
 #include "detour.h"
 #include <stdio.h>
+#include <string>
 
 long long get_tick_count(void)
 {
@@ -25,21 +26,32 @@ inline void getPos(dtPolyRef& ref, float pos[3])
 
 const int PATH_MAX_NODE = 2048;
 const char* MESH_FILE = "../../nav_test.obj.tile.bin";
+const char* MESH_FILE_CACHE = "../../nav_test.obj.tilecache.bin";
 
-int main() {
+int main(int argn, char* argv[]) {
     FILE* f1 = fopen("../../randpos.bin", "rb");
     fread(randPosValue, RAND_MAX_COUNT * 4 * sizeof(float), 1, f1);
     fclose(f1);
 
+    std::string nn = "";
 
     int errCode;
-    auto mesh = LoadStaticMesh(MESH_FILE, errCode);
+    dtNavMesh* mesh;
+    if (argn >= 2 && argv[1] == std::string("1")) {
+        mesh = LoadDynamicMesh(MESH_FILE_CACHE, errCode);
+        nn = "tilecache";
+    }
+    else {
+        mesh = LoadStaticMesh(MESH_FILE, errCode);
+        nn = "tile";
+    }
     assert(errCode == 0);
     auto query = CreateQuery(mesh, 2048);
     assert(query != nullptr);
     auto filter = dtQueryFilter();
 
     int count = RAND_MAX_COUNT / 2;
+    printf("test type: %s\n", nn.c_str());
     printf("total count: %d\n", count);
 
     auto t1 = get_tick_count();

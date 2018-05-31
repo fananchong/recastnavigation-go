@@ -1,7 +1,6 @@
 package benchmarks
 
 import (
-	"io/ioutil"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -10,14 +9,8 @@ import (
 	"github.com/fananchong/recastnavigation-go/tests"
 )
 
-const RAND_MAX_COUNT int = 20000000
-const PATH_MAX_NODE int = 2048
-
-var tempdata, err = ioutil.ReadFile("../tests/randpos.bin")
-var mesh = tests.LoadStaticMesh("../tests/nav_test.obj.tile.bin")
-var randPosValue []float32
-
-func Benchmark_GO_FindPath(t *testing.B) {
+func Benchmark_Tile_FindPath(t *testing.B) {
+	var randPosValue []float32
 	var randPosIndex int = 0
 
 	getPos := func(ref *detour.DtPolyRef, pos []float32) {
@@ -33,7 +26,7 @@ func Benchmark_GO_FindPath(t *testing.B) {
 	sliceHeader.Len = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata[0])))
 
-	query := tests.CreateQuery(mesh, 2048)
+	query := tests.CreateQuery(mesh1, 2048)
 	filter := detour.DtAllocDtQueryFilter()
 
 	for i := 0; i < t.N; i++ {
@@ -51,7 +44,8 @@ func Benchmark_GO_FindPath(t *testing.B) {
 	}
 }
 
-func Benchmark_GO_MoveAlongSurface(t *testing.B) {
+func Benchmark_Tile_MoveAlongSurface(t *testing.B) {
+	var randPosValue []float32
 	var randPosIndex int = 0
 
 	getPos := func(ref *detour.DtPolyRef, pos []float32) {
@@ -62,13 +56,12 @@ func Benchmark_GO_MoveAlongSurface(t *testing.B) {
 		randPosIndex++
 	}
 
-	detour.DtAssert(err == nil)
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&randPosValue)))
 	sliceHeader.Cap = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
 	sliceHeader.Len = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata[0])))
 
-	query := tests.CreateQuery(mesh, 2048)
+	query := tests.CreateQuery(mesh1, 2048)
 	filter := detour.DtAllocDtQueryFilter()
 
 	for i := 0; i < t.N; i++ {

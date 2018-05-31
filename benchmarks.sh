@@ -4,7 +4,8 @@ export CURDIR=$PWD
 export GOPATH=$CURDIR/../../../../
 
 cd ./tests/c/bin/
-./cbenchmark
+./cbenchmark 0
+./cbenchmark 1
 
 cd $CURDIR/benchmarks
 

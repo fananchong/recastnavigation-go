@@ -200,6 +200,9 @@ dtNavMesh* LoadDynamicMesh(const char*path, int& errCode) {
         return nullptr;
     }
 
+    printf("boundsMin: %f, %f, %f\n", header.boundsMinX, header.boundsMinY, header.boundsMinZ);
+    printf("boundsMax: %f, %f, %f\n", header.boundsMaxX, header.boundsMaxY, header.boundsMaxZ);
+
     dtNavMesh* mMesh = dtAllocNavMesh();
     if (!mMesh)
     {
