@@ -22,9 +22,9 @@ func Benchmark_Tile_FindPath(t *testing.B) {
 	}
 
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&randPosValue)))
-	sliceHeader.Cap = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
-	sliceHeader.Len = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata[0])))
+	sliceHeader.Cap = int(len(tempdata1) / int(unsafe.Sizeof(float32(1.0))))
+	sliceHeader.Len = int(len(tempdata1) / int(unsafe.Sizeof(float32(1.0))))
+	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata1[0])))
 
 	query := tests.CreateQuery(mesh1, 2048)
 	filter := detour.DtAllocDtQueryFilter()
@@ -57,9 +57,9 @@ func Benchmark_Tile_MoveAlongSurface(t *testing.B) {
 	}
 
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&randPosValue)))
-	sliceHeader.Cap = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
-	sliceHeader.Len = int(len(tempdata) / int(unsafe.Sizeof(float32(1.0))))
-	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata[0])))
+	sliceHeader.Cap = int(len(tempdata1) / int(unsafe.Sizeof(float32(1.0))))
+	sliceHeader.Len = int(len(tempdata1) / int(unsafe.Sizeof(float32(1.0))))
+	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata1[0])))
 
 	query := tests.CreateQuery(mesh1, 2048)
 	filter := detour.DtAllocDtQueryFilter()

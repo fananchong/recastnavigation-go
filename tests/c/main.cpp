@@ -4,7 +4,7 @@
 #include <vector>
 #include <time.h>
 
-const int RAND_MAX_COUNT = 20000000;
+const int RAND_MAX_COUNT = 2000000;
 float randValue[RAND_MAX_COUNT];
 int randIndex = 0;
 inline float frand()
@@ -30,21 +30,24 @@ const char* MESH_FILE_CACHE = "../../nav_test.obj.tilecache.bin";
 int main(int argn, char* argv[]) {
     srand((unsigned int)(time(0)));
 
+    std::string nn = "";
+
     int errCode;
     dtNavMesh* mesh;
     if (argn >= 3 && argv[2] == std::string("1")) {
         mesh = LoadDynamicMesh(MESH_FILE_CACHE, errCode);
         outValue[outIndex++] = 1;
+        nn = "tilecache";
     }
     else {
         mesh = LoadStaticMesh(MESH_FILE, errCode);
         outValue[outIndex++] = 0;
+        nn = "tile";
     }
     assert(errCode == 0);
     auto query = CreateQuery(mesh, 2048);
     assert(query != nullptr);
     auto filter = dtQueryFilter();
-
 
     if (argn > 1 && argv[1] == std::string("rand")) {
         FILE* f = fopen("../../rand.bin", "wb");
@@ -55,8 +58,8 @@ int main(int argn, char* argv[]) {
         fclose(f);
     }
     else if (argn > 1 && argv[1] == std::string("randpos")) {
-        void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter);
-        randomPos(mesh, query, &filter);
+        void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter, std::string &nn);
+        randomPos(mesh, query, &filter, nn);
     }
     else {
         FILE* f1 = fopen("../../rand.bin", "rb");
@@ -71,8 +74,9 @@ int main(int argn, char* argv[]) {
     return 0;
 }
 
-void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter) {
-    FILE* f = fopen("../../randpos.bin", "wb");
+void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter, std::string &nn) {
+    std::string fname = "../../randpos." + nn + ".bin";
+    FILE* f = fopen(fname.c_str(), "wb");
     for (int i = 0; i < RAND_MAX_COUNT;i++) {
         float startPos[3] = { 0,0,0 };
         dtPolyRef startRef = 0;

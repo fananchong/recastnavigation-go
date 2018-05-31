@@ -5,4 +5,5 @@ echo %GOPATH%
 
 echo "start random postion..."
 cd %CURDIR%\tests\c\bin
-call ctest.exe randpos
+call ctest.exe randpos 1
+call ctest.exe randpos 0

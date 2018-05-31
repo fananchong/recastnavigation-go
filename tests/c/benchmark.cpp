@@ -29,10 +29,6 @@ const char* MESH_FILE = "../../nav_test.obj.tile.bin";
 const char* MESH_FILE_CACHE = "../../nav_test.obj.tilecache.bin";
 
 int main(int argn, char* argv[]) {
-    FILE* f1 = fopen("../../randpos.bin", "rb");
-    fread(randPosValue, RAND_MAX_COUNT * 4 * sizeof(float), 1, f1);
-    fclose(f1);
-
     std::string nn = "";
 
     int errCode;
@@ -40,11 +36,20 @@ int main(int argn, char* argv[]) {
     if (argn >= 2 && argv[1] == std::string("1")) {
         mesh = LoadDynamicMesh(MESH_FILE_CACHE, errCode);
         nn = "tilecache";
+
+        FILE* f1 = fopen("../../randpos.tilecache.bin", "rb");
+        fread(randPosValue, RAND_MAX_COUNT * 4 * sizeof(float), 1, f1);
+        fclose(f1);
     }
     else {
         mesh = LoadStaticMesh(MESH_FILE, errCode);
         nn = "tile";
+
+        FILE* f1 = fopen("../../randpos.tile.bin", "rb");
+        fread(randPosValue, RAND_MAX_COUNT * 4 * sizeof(float), 1, f1);
+        fclose(f1);
     }
+
     assert(errCode == 0);
     auto query = CreateQuery(mesh, 2048);
     assert(query != nullptr);
