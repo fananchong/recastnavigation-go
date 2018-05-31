@@ -121,8 +121,8 @@ func LoadDynamicMesh(path string) (*detour.DtNavMesh, *dtcache.DtTileCache) {
 	d := 0
 	header := (*TileCacheSetHeader)(unsafe.Pointer(&(meshData[d])))
 	d += int(unsafe.Sizeof(*header))
-	detour.DtAssert(header.magic != TILECACHESET_MAGIC)
-	detour.DtAssert(header.version != TILECACHESET_VERSION)
+	detour.DtAssert(header.magic == TILECACHESET_MAGIC)
+	detour.DtAssert(header.version == TILECACHESET_VERSION)
 
 	navMesh := detour.DtAllocNavMesh()
 	state := navMesh.Init(&header.meshParams)
