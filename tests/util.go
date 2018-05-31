@@ -115,6 +115,46 @@ func (this *FastLZCompressor) Decompress(compressed []byte, compressedSize int32
 	}
 }
 
+const (
+	POLYAREA_GROUND uint8 = 0
+	POLYAREA_WATER  uint8 = 1
+	POLYAREA_ROAD   uint8 = 2
+	POLYAREA_DOOR   uint8 = 3
+	POLYAREA_GRASS  uint8 = 4
+	POLYAREA_JUMP   uint8 = 5
+)
+
+const (
+	POLYFLAGS_WALK     uint16 = 0x01   // Ability to walk (ground, grass, road)
+	POLYFLAGS_SWIM     uint16 = 0x02   // Ability to swim (water).
+	POLYFLAGS_DOOR     uint16 = 0x04   // Ability to move through doors.
+	POLYFLAGS_JUMP     uint16 = 0x08   // Ability to jump.
+	POLYFLAGS_DISABLED uint16 = 0x10   // Disabled polygon
+	POLYFLAGS_ALL      uint16 = 0xffff // All abilities.
+)
+
+type MeshProcess struct{}
+
+func (this *MeshProcess) Process(params *detour.DtNavMeshCreateParams, polyAreas []uint8, polyFlags []uint16) {
+	// Update poly flags from areas.
+	for i := 0; i < int(params.PolyCount); i++ {
+		if polyAreas[i] == dtcache.DT_TILECACHE_WALKABLE_AREA {
+			polyAreas[i] = POLYAREA_GROUND
+		}
+		if polyAreas[i] == POLYAREA_GROUND ||
+			polyAreas[i] == POLYAREA_GRASS ||
+			polyAreas[i] == POLYAREA_ROAD {
+			polyFlags[i] = POLYFLAGS_WALK
+		} else if polyAreas[i] == POLYAREA_WATER {
+			polyFlags[i] = POLYFLAGS_SWIM
+		} else if polyAreas[i] == POLYAREA_DOOR {
+			polyFlags[i] = POLYFLAGS_WALK | POLYFLAGS_DOOR
+		}
+	}
+
+	// TODO: Pass in off-mesh connections.
+}
+
 func LoadDynamicMesh(path string) (*detour.DtNavMesh, *dtcache.DtTileCache) {
 	meshData, err := ioutil.ReadFile(path)
 	detour.DtAssert(err == nil)
@@ -128,7 +168,7 @@ func LoadDynamicMesh(path string) (*detour.DtNavMesh, *dtcache.DtTileCache) {
 	state := navMesh.Init(&header.meshParams)
 	detour.DtAssert(detour.DtStatusSucceed(state))
 	tileCache := dtcache.DtAllocTileCache()
-	state = tileCache.Init(&header.cacheParams, &FastLZCompressor{}, nil)
+	state = tileCache.Init(&header.cacheParams, &FastLZCompressor{}, &MeshProcess{})
 	detour.DtAssert(detour.DtStatusSucceed(state))
 
 	for i := 0; i < int(header.numTiles); i++ {
