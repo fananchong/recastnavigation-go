@@ -22,4 +22,8 @@ c++原版：[tests/c/benchmark.cpp](tests/c/benchmark.cpp)
 
 go翻译版本: [benchmarks/go_test.go](benchmarks/go_test.go)
 
-做测试前，先使用 gen_random_pos.bat 生成 随机路点信息
+
+## 测试预备工作
+
+  1. 进入 tests/c/build，生成 ctest、cbenchmark
+  1. 使用 gen_random_pos.bat 生成 随机路点信息
