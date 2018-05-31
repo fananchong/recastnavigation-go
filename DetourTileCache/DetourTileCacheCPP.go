@@ -12,13 +12,13 @@ const (
 	dtTileCacheObstacleSize = unsafe.Sizeof(DtTileCacheObstacle{})
 )
 
-func dtAllocTileCache() *DtTileCache {
+func DtAllocTileCache() *DtTileCache {
 	c := &DtTileCache{}
 	c.construct()
 	return c
 }
 
-func dtFreeTileCache(tc *DtTileCache) {
+func DtFreeTileCache(tc *DtTileCache) {
 	if tc != nil {
 		tc.destructor()
 	}

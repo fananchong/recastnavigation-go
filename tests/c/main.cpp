@@ -26,12 +26,20 @@ float myrand() {
 }
 
 const char* MESH_FILE = "../../nav_test.obj.tile.bin";
-
+const char* MESH_FILE_CACHE = "../../nav_test.obj.tilecache.bin";
 int main(int argn, char* argv[]) {
     srand((unsigned int)(time(0)));
 
     int errCode;
-    auto mesh = LoadStaticMesh(MESH_FILE, errCode);
+    dtNavMesh* mesh;
+    if (argn >= 3 && argv[2] == std::string("1")) {
+        mesh = LoadDynamicMesh(MESH_FILE_CACHE, errCode);
+        outValue[outIndex++] = 1;
+    }
+    else {
+        mesh = LoadStaticMesh(MESH_FILE, errCode);
+        outValue[outIndex++] = 0;
+    }
     assert(errCode == 0);
     auto query = CreateQuery(mesh, 2048);
     assert(query != nullptr);

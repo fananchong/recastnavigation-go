@@ -33,11 +33,13 @@ project "ctest"
         "../main.cpp",
         "../detour.h",
         "../detour.cpp",
+        "../detour_util.h",
+        "../detour_util.cpp",
         "../Detour/Include/*.h",
         "../Detour/Source/*.cpp",
         "../DetourTileCache/Include/*.h",
         "../DetourTileCache/Source/*.cpp",
-        "../Contrib/fastlz",
+        "../Contrib/fastlz/**",
     }
     
 project "cbenchmark"
@@ -48,9 +50,11 @@ project "cbenchmark"
         "../benchmark.cpp",
         "../detour.h",
         "../detour.cpp",
+        "../detour_util.h",
+        "../detour_util.cpp",
         "../Detour/Include/*.h",
         "../Detour/Source/*.cpp",
         "../DetourTileCache/Include/*.h",
         "../DetourTileCache/Source/*.cpp",
-        "../Contrib/fastlz",
+        "../Contrib/fastlz/**",
     }

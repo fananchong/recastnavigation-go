@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/fananchong/recastnavigation-go/Detour"
+	"github.com/fananchong/recastnavigation-go/DetourTileCache"
 )
 
 var randValue []float32
@@ -37,7 +38,15 @@ func Test_main(t *testing.T) {
 	sliceHeader.Len = int(len(tempdata2) / int(unsafe.Sizeof(float32(1.0))))
 	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata2[0])))
 
-	mesh := LoadStaticMesh("nav_test.obj.tile.bin")
+	var mesh *detour.DtNavMesh
+	var tileCache *dtcache.DtTileCache
+	if resultValue[resultIndex] == 0 {
+		mesh = LoadStaticMesh("nav_test.obj.tile.bin")
+	} else {
+		mesh, tileCache = LoadDynamicMesh("nav_test.obj.tilecache.bin")
+		detour.DtIgnoreUnused(tileCache)
+	}
+	resultIndex++
 	query := CreateQuery(mesh, 2048)
 	filter := detour.DtAllocDtQueryFilter()
 
