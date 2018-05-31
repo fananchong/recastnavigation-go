@@ -4,9 +4,11 @@
 
 ## 翻译内容
 
-本项目打算将 https://github.com/recastnavigation/recastnavigation 中的 Detour、DetourTileCache 翻译成 golang 版本
-
 基于 recastnavigation git版本： 18562383f4c5cffa0678c709049340516ebc5e40
+
+翻译：
+  - Detour
+  - DetourTileCache
 
 
 ## 基准测试
@@ -20,14 +22,4 @@ c++原版：[tests/c/benchmark.cpp](tests/c/benchmark.cpp)
 
 go翻译版本: [benchmarks/go_test.go](benchmarks/go_test.go)
 
-
-
-
-## 已完成
-
-  - 翻译 Detour 库
-
-
-## TODO
-
-  - 翻译 DetourTileCache 库
+做测试前，先使用 gen_random_pos.bat 生成 随机路点信息
