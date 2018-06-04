@@ -101,4 +101,24 @@ int main(int argn, char* argv[]) {
     t2 = get_tick_count();
     printf("moveAlongSurface cost:%20lldns %20.3fns/op %20.3fms/op\n",
         t2 - t1, float(t2 - t1) / count, float(t2 - t1) / count / 1000000);
+
+
+    randPosIndex = 0;
+    t1 = get_tick_count();
+    for (int i = 0; i < count; i++)
+    {
+        dtStatus stat;
+        float halfExtents[3] = { 0.6f, 2.0f, 0.6f };
+        float startPos[3] = { 0,0,0 };
+        dtPolyRef startRef = 0;
+        getPos(startRef, startPos);
+        dtPolyRef nearestRef = 0;
+        float nearestPos[3] = { 0,0,0 };
+        stat = query->findNearestPoly(startPos, halfExtents, &filter, &nearestRef, nearestPos);
+        assert(dtStatusSucceed(stat));
+    }
+    t2 = get_tick_count();
+    printf("findNearestPoly cost:%20lldns %20.3fns/op %20.3fms/op\n",
+        t2 - t1, float(t2 - t1) / count, float(t2 - t1) / count / 1000000);
+
 }

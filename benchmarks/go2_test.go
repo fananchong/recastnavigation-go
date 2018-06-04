@@ -80,3 +80,36 @@ func Benchmark_TileCache_MoveAlongSurface(t *testing.B) {
 		detour.DtAssert(detour.DtStatusSucceed(stat))
 	}
 }
+
+func Benchmark_TileCache_FindNearestPoly(t *testing.B) {
+	var randPosValue []float32
+	var randPosIndex int = 0
+
+	getPos := func(ref *detour.DtPolyRef, pos []float32) {
+		*ref = detour.DtPolyRef(randPosValue[randPosIndex*4+0])
+		pos[0] = randPosValue[randPosIndex*4+1]
+		pos[1] = randPosValue[randPosIndex*4+2]
+		pos[2] = randPosValue[randPosIndex*4+3]
+		randPosIndex++
+	}
+
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&randPosValue)))
+	sliceHeader.Cap = int(len(tempdata2) / int(unsafe.Sizeof(float32(1.0))))
+	sliceHeader.Len = int(len(tempdata2) / int(unsafe.Sizeof(float32(1.0))))
+	sliceHeader.Data = uintptr(unsafe.Pointer(&(tempdata2[0])))
+
+	query := tests.CreateQuery(mesh2, 2048)
+	filter := detour.DtAllocDtQueryFilter()
+
+	for i := 0; i < t.N; i++ {
+		var stat detour.DtStatus
+		halfExtents := [3]float32{0.6, 2.0, 0.6}
+		startPos := [3]float32{0, 0, 0}
+		var startRef detour.DtPolyRef
+		getPos(&startRef, startPos[:])
+		var nearestRef detour.DtPolyRef
+		nearestPos := [3]float32{0, 0, 0}
+		stat = query.FindNearestPoly(startPos[:], halfExtents[:], filter, &nearestRef, nearestPos[:])
+		detour.DtAssert(detour.DtStatusSucceed(stat))
+	}
+}
