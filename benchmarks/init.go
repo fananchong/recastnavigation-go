@@ -20,7 +20,7 @@ var tilecache2 *dtcache.DtTileCache
 func init() {
 	tempdata1, _ = ioutil.ReadFile("../tests/randpos.tile.bin")
 	tempdata2, _ = ioutil.ReadFile("../tests/randpos.tilecache.bin")
-	mesh1 = tests.LoadStaticMesh("../tests/nav_test.obj.tile.bin")
-	mesh2, tilecache2 = tests.LoadDynamicMesh("../tests/nav_test.obj.tilecache.bin")
+	mesh1 = tests.LoadStaticMesh("../tests/scene1.obj.tile.bin")
+	mesh2, tilecache2 = tests.LoadDynamicMesh("../tests/scene1.obj.tilecache.bin")
 	detour.DtIgnoreUnused(tilecache2)
 }

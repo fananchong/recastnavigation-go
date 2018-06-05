@@ -48,9 +48,9 @@ struct TileCacheTileHeader
     int32_t dataSize;
 };
 
-static const int32_t NAVMESHSET_MAGIC = 'M' << 24 | 'S' << 16 | 'E' << 8 | 'T';
+static const int32_t NAVMESHSET_MAGIC = 'M' << 24 | 'S' << 16 | 'A' << 8 | 'T';
 static const int32_t NAVMESHSET_VERSION = 1;
-static const int32_t TILECACHESET_MAGIC = 'T' << 24 | 'S' << 16 | 'E' << 8 | 'T';
+static const int32_t TILECACHESET_MAGIC = 'T' << 24 | 'S' << 16 | 'A' << 8 | 'T';
 static const int32_t TILECACHESET_VERSION = 1;
 
 

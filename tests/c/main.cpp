@@ -25,8 +25,8 @@ float myrand() {
     return (float)rand() / (float)RAND_MAX;
 }
 
-const char* MESH_FILE = "../../nav_test.obj.tile.bin";
-const char* MESH_FILE_CACHE = "../../nav_test.obj.tilecache.bin";
+const char* MESH_FILE = "../../scene1.obj.tile.bin";
+const char* MESH_FILE_CACHE = "../../scene1.obj.tilecache.bin";
 int main(int argn, char* argv[]) {
     srand((unsigned int)(time(0)));
 

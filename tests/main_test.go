@@ -41,9 +41,9 @@ func Test_main(t *testing.T) {
 	var mesh *detour.DtNavMesh
 	var tileCache *dtcache.DtTileCache
 	if resultValue[resultIndex] == 0 {
-		mesh = LoadStaticMesh("nav_test.obj.tile.bin")
+		mesh = LoadStaticMesh("scene1.obj.tile.bin")
 	} else {
-		mesh, tileCache = LoadDynamicMesh("nav_test.obj.tilecache.bin")
+		mesh, tileCache = LoadDynamicMesh("scene1.obj.tilecache.bin")
 		detour.DtIgnoreUnused(tileCache)
 	}
 	resultIndex++

@@ -53,9 +53,9 @@ type TileCacheTileHeader struct {
 	dataSize int32
 }
 
-const NAVMESHSET_MAGIC int32 = int32('M')<<24 | int32('S')<<16 | int32('E')<<8 | int32('T')
+const NAVMESHSET_MAGIC int32 = int32('M')<<24 | int32('S')<<16 | int32('A')<<8 | int32('T')
 const NAVMESHSET_VERSION int32 = 1
-const TILECACHESET_MAGIC int32 = int32('T')<<24 | int32('S')<<16 | int32('E')<<8 | int32('T')
+const TILECACHESET_MAGIC int32 = int32('T')<<24 | int32('S')<<16 | int32('A')<<8 | int32('T')
 const TILECACHESET_VERSION int32 = 1
 
 func LoadStaticMesh(path string) *detour.DtNavMesh {
