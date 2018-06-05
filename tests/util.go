@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/fananchong/recastnavigation-go/Detour"
-	"github.com/fananchong/recastnavigation-go/DetourTileCache"
+	detour "github.com/fananchong/recastnavigation-go/Detour"
+	dtcache "github.com/fananchong/recastnavigation-go/DetourTileCache"
 	"github.com/fananchong/recastnavigation-go/fastlz"
 )
 
@@ -197,4 +197,89 @@ func LoadDynamicMesh(path string) (*detour.DtNavMesh, *dtcache.DtTileCache) {
 		}
 	}
 	return navMesh, tileCache
+}
+
+func FindRandomPoint(query *detour.DtNavMeshQuery, filter *detour.DtQueryFilter, frand func() float32,
+	randomRef *detour.DtPolyRef, randomPt []float32) detour.DtStatus {
+	m_nav := query.GetAttachedNavMesh()
+	detour.DtAssert(m_nav != nil)
+
+	// Randomly pick one tile. Assume that all tiles cover roughly the same area.
+	tileIndex := int(frand() * float32(m_nav.GetMaxTiles()))
+	var tile *detour.DtMeshTile
+	for i := tileIndex; true; i++ {
+		i = i % int(m_nav.GetMaxTiles())
+		tile = m_nav.GetTile(i)
+		if tile != nil && tile.Header != nil {
+			break
+		}
+	}
+	if tile == nil {
+		return detour.DT_FAILURE
+	}
+	// Randomly pick one polygon weighted by polygon area.
+	var poly *detour.DtPoly
+	var polyRef detour.DtPolyRef
+	base := m_nav.GetPolyRefBase(tile)
+
+	var areaSum float32
+	for i := 0; i < int(tile.Header.PolyCount); i++ {
+		p := &tile.Polys[i]
+		// Do not return off-mesh connection polygons.
+		if p.GetType() != detour.DT_POLYTYPE_GROUND {
+			continue
+		}
+		// Must pass filter
+		ref := base | (detour.DtPolyRef)(i)
+		if !filter.PassFilter(ref, tile, p) {
+			continue
+		}
+		// Calc area of the polygon.
+		var polyArea float32
+		for j := 2; j < int(p.VertCount); j++ {
+			va := tile.Verts[p.Verts[0]*3:]
+			vb := tile.Verts[p.Verts[j-1]*3:]
+			vc := tile.Verts[p.Verts[j]*3:]
+			polyArea += detour.DtTriArea2D(va, vb, vc)
+		}
+
+		// Choose random polygon weighted by area, using reservoi sampling.
+		areaSum += polyArea
+		u := frand()
+		if u*areaSum <= polyArea {
+			poly = p
+			polyRef = ref
+		}
+	}
+
+	if poly == nil {
+		return detour.DT_FAILURE
+	}
+	// Randomly pick point on polygon.
+	v := tile.Verts[poly.Verts[0]*3:]
+	var verts [3 * detour.DT_VERTS_PER_POLYGON]float32
+	var areas [detour.DT_VERTS_PER_POLYGON]float32
+	detour.DtVcopy(verts[0*3:], v)
+	for j := 1; j < int(poly.VertCount); j++ {
+		v = tile.Verts[poly.Verts[j]*3:]
+		detour.DtVcopy(verts[j*3:], v)
+	}
+
+	s := frand()
+	t := frand()
+
+	var pt [3]float32
+	detour.DtRandomPointInConvexPoly(verts[:], int(poly.VertCount), areas[:], s, t, pt[:])
+
+	var h float32
+	status := query.GetPolyHeight(polyRef, pt[:], &h)
+	if detour.DtStatusFailed(status) {
+		return status
+	}
+	pt[1] = h
+
+	detour.DtVcopy(randomPt, pt[:])
+	*randomRef = polyRef
+
+	return detour.DT_SUCCESS
 }

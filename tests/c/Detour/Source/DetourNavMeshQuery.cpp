@@ -84,7 +84,7 @@ float dtQueryFilter::getCost(const float* pa, const float* pb,
     return dtVdist(pa, pb) * m_areaCost[curPoly->getArea()];
 }
 #else
-inline bool dtQueryFilter::passFilter(const dtPolyRef /*ref*/,
+bool dtQueryFilter::passFilter(const dtPolyRef /*ref*/,
     const dtMeshTile* /*tile*/,
     const dtPoly* poly) const
 {

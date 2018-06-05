@@ -1,5 +1,8 @@
 #include "detour.h"
 #include "detour_util.h"
+#include <Detour/Include/DetourAssert.h>
+#include <Detour/Include/DetourCommon.h>
+#include <Detour/Include/DetourNavMeshQuery.h>
 #include <stdio.h>
 #include <string>
 #include <string.h>
@@ -277,4 +280,95 @@ dtNavMesh* LoadDynamicMesh(const char*path, int& errCode) {
         }
     }
     return mMesh;
+}
+
+
+dtStatus FindRandomPoint(const dtNavMeshQuery *query,
+    const dtQueryFilter* filter, float(*frand)(),
+    dtPolyRef* randomRef, float* randomPt)
+{
+    const dtNavMesh* m_nav = query->getAttachedNavMesh();
+    dtAssert(m_nav);
+
+    // Randomly pick one tile. Assume that all tiles cover roughly the same area.
+    int tileIndex = int(frand() * m_nav->getMaxTiles());
+    const dtMeshTile* tile = 0;
+    for (int i = tileIndex; true; i++)
+    {
+        i = i%m_nav->getMaxTiles();
+        tile = m_nav->getTile(i);
+        if (tile && tile->header) {
+            break;
+        }
+    }
+    if (!tile)
+        return DT_FAILURE;
+
+    // Randomly pick one polygon weighted by polygon area.
+    const dtPoly* poly = 0;
+    dtPolyRef polyRef = 0;
+    const dtPolyRef base = m_nav->getPolyRefBase(tile);
+
+    float areaSum = 0.0f;
+    for (int i = 0; i < tile->header->polyCount; ++i)
+    {
+        const dtPoly* p = &tile->polys[i];
+        // Do not return off-mesh connection polygons.
+        if (p->getType() != DT_POLYTYPE_GROUND)
+            continue;
+        // Must pass filter
+        const dtPolyRef ref = base | (const dtPolyRef)i;
+        if (!filter->passFilter(ref, tile, p))
+            continue;
+
+        // Calc area of the polygon.
+        float polyArea = 0.0f;
+        for (int j = 2; j < p->vertCount; ++j)
+        {
+            const float* va = &tile->verts[p->verts[0] * 3];
+            const float* vb = &tile->verts[p->verts[j - 1] * 3];
+            const float* vc = &tile->verts[p->verts[j] * 3];
+            polyArea += dtTriArea2D(va, vb, vc);
+        }
+
+        // Choose random polygon weighted by area, using reservoi sampling.
+        areaSum += polyArea;
+        const float u = frand();
+        if (u*areaSum <= polyArea)
+        {
+            poly = p;
+            polyRef = ref;
+        }
+    }
+
+    if (!poly)
+        return DT_FAILURE;
+
+    // Randomly pick point on polygon.
+    const float* v = &tile->verts[poly->verts[0] * 3];
+    float verts[3 * DT_VERTS_PER_POLYGON];
+    float areas[DT_VERTS_PER_POLYGON];
+    dtVcopy(&verts[0 * 3], v);
+    for (int j = 1; j < poly->vertCount; ++j)
+    {
+        v = &tile->verts[poly->verts[j] * 3];
+        dtVcopy(&verts[j * 3], v);
+    }
+
+    const float s = frand();
+    const float t = frand();
+
+    float pt[3];
+    dtRandomPointInConvexPoly(verts, poly->vertCount, areas, s, t, pt);
+
+    float h = 0.0f;
+    dtStatus status = query->getPolyHeight(polyRef, pt, &h);
+    if (dtStatusFailed(status))
+        return status;
+    pt[1] = h;
+
+    dtVcopy(randomPt, pt);
+    *randomRef = polyRef;
+
+    return DT_SUCCESS;
 }

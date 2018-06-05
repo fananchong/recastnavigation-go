@@ -28,3 +28,7 @@ enum PolyFlags
 dtNavMesh* LoadStaticMesh(const char*path, int& errCode);
 dtNavMeshQuery* CreateQuery(dtNavMesh* mesh, int maxNode);
 dtNavMesh* LoadDynamicMesh(const char*path, int& errCode);
+
+dtStatus FindRandomPoint(const dtNavMeshQuery *query,
+    const dtQueryFilter* filter, float(*frand)(),
+    dtPolyRef* randomRef, float* randomPt);

@@ -58,14 +58,14 @@ int main(int argn, char* argv[]) {
         fclose(f);
     }
     else if (argn > 1 && argv[1] == std::string("randpos")) {
-        void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter, std::string &nn);
+        void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, const dtQueryFilter* filter, std::string &nn);
         randomPos(mesh, query, &filter, nn);
     }
     else {
         FILE* f1 = fopen("../../rand.bin", "rb");
         fread(randValue, RAND_MAX_COUNT * sizeof(float), 1, f1);
         fclose(f1);
-        int test(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter);
+        int test(dtNavMesh* mesh, dtNavMeshQuery* query, const dtQueryFilter* filter);
         test(mesh, query, &filter);
         FILE* f2 = fopen("../../result.bin", "wb");
         fwrite(outValue, outIndex * sizeof(float), 1, f2);
@@ -74,13 +74,13 @@ int main(int argn, char* argv[]) {
     return 0;
 }
 
-void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter, std::string &nn) {
+void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, const dtQueryFilter* filter, std::string &nn) {
     std::string fname = "../../randpos." + nn + ".bin";
     FILE* f = fopen(fname.c_str(), "wb");
     for (int i = 0; i < RAND_MAX_COUNT;i++) {
         float startPos[3] = { 0,0,0 };
         dtPolyRef startRef = 0;
-        dtStatus stat = query->findRandomPoint(filter, myrand, &startRef, startPos);
+        dtStatus stat = FindRandomPoint(query, filter, myrand, &startRef, startPos);
         float tempRef = float(startRef);
         assert(dtStatusSucceed(stat));
         fwrite(&tempRef, sizeof(float), 1, f);
@@ -89,7 +89,7 @@ void randomPos(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter, st
     fclose(f);
 }
 
-int test(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter) {
+int test(dtNavMesh* mesh, dtNavMeshQuery* query, const dtQueryFilter* filter) {
     dtStatus stat;
     float halfExtents[3] = { 2, 4, 2 };
     float startPos[3] = { 0,0,0 };
@@ -98,9 +98,9 @@ int test(dtNavMesh* mesh, dtNavMeshQuery* query, dtQueryFilter* filter) {
     dtPolyRef endRef = 0;
 
     //printf("================================================ findRandomPoint ================================================\n");
-    stat = query->findRandomPoint(filter, frand, &startRef, startPos);
+    stat = FindRandomPoint(query, filter, frand, &startRef, startPos);
     assert(dtStatusSucceed(stat));
-    stat = query->findRandomPoint(filter, frand, &endRef, endPos);
+    stat = FindRandomPoint(query, filter, frand, &endRef, endPos);
     assert(dtStatusSucceed(stat));
     //printf("startPos: %.2f %.2f %.2f\n", startPos[0], startPos[1], startPos[2]);
     //printf("endPos: %.2f %.2f %.2f\n", endPos[0], endPos[1], endPos[2]);

@@ -56,9 +56,9 @@ func Test_main(t *testing.T) {
 	var startRef, endRef detour.DtPolyRef
 
 	t.Logf("================================================ findRandomPoint ================================================\n")
-	stat = query.FindRandomPoint(filter, frand, &startRef, startPos[:])
+	stat = FindRandomPoint(query, filter, frand, &startRef, startPos[:])
 	detour.DtAssert(detour.DtStatusSucceed(stat))
-	stat = query.FindRandomPoint(filter, frand, &endRef, endPos[:])
+	stat = FindRandomPoint(query, filter, frand, &endRef, endPos[:])
 	detour.DtAssert(detour.DtStatusSucceed(stat))
 	t.Logf("startPos: %.2f %.2f %.2f", startPos[0], startPos[1], startPos[2])
 	t.Logf("endPos: %.2f %.2f %.2f", endPos[0], endPos[1], endPos[2])

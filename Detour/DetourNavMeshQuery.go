@@ -128,6 +128,14 @@ type DtNavMeshQuery struct {
 	m_openList     *DtNodeQueue ///< Pointer to open list queue.
 }
 
+/// Gets the node pool.
+/// @returns The node pool.
+func (this *DtNavMeshQuery) GetNodePool() *DtNodePool { return this.m_nodePool }
+
+/// Gets the navigation mesh the query object is using.
+/// @return The navigation mesh the query object is using.
+func (this *DtNavMeshQuery) GetAttachedNavMesh() *DtNavMesh { return this.m_nav }
+
 /// Allocates a query object using the Detour allocator.
 /// @return An allocated query object, or null on failure.
 /// @ingroup detour
