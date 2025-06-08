@@ -808,7 +808,7 @@ func buildMeshAdjacency(polys []uint16, npolys int32,
 	// http://www.terathon.com/code/edges.php
 
 	maxEdgeCount := npolys * MAX_VERTS_PER_POLY
-	firstEdge := make([]uint16, nverts*maxEdgeCount)
+	firstEdge := make([]uint16, nverts+maxEdgeCount)
 	nextEdge := firstEdge[nverts:]
 
 	var edgeCount int32
